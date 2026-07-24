@@ -264,6 +264,7 @@
       <span class="chip" data-area="Chinese">🥢 Chinas</span>
       <span class="chip" data-filter="disponibles">✅ Con lo que tengo</span>
       <span class="chip" data-filter="mias">⭐ Mis recetas</span>
+      <span class="chip" data-filter="favs">❤️ Favoritas</span>
     </div>
     <div class="cards" id="recipeCards"></div>
   </section>
@@ -532,14 +533,17 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
 let customRecipes=JSON.parse(localStorage.getItem(LS.custom)||'[]');
+let favorites=JSON.parse(localStorage.getItem(LS.fav)||'{}');
 let lastRecipeView=showColombian;
 const ALL_RECIPES=()=>COL.concat(customRecipes);
 function saveCustom(){ localStorage.setItem(LS.custom,JSON.stringify(customRecipes)); }
+function saveFav(){ localStorage.setItem(LS.fav,JSON.stringify(favorites)); }
+function isFav(id){ return !!favorites[id]; }
 
 function loadPantry(){
   const s=localStorage.getItem(LS.pantry); if(s) return JSON.parse(s);
@@ -574,6 +578,7 @@ const Sync={
     this.db.ref(b+'/menu').on('value',s=>{ currentMenu=s.val()||null; saveMenu(); renderMenu(); });
     this.db.ref(b+'/shop').on('value',s=>{ shopChecked=s.val()||{}; saveShop(); renderMenu(); });
     this.db.ref(b+'/custom').on('value',s=>{ const v=s.val(); customRecipes=v?Object.values(v):[]; saveCustom(); if(lastRecipeView) lastRecipeView(); });
+    this.db.ref(b+'/favs').on('value',s=>{ favorites=s.val()||{}; saveFav(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
     updateStatus();
   },
   seedPantry(){ const p={}; PANTRY_DEFAULTS.forEach(([n,c])=>{ p[keyOf(n)]={name:n,cat:c,have:false}; }); this.db.ref(this.base()+'/pantry').set(p); },
@@ -583,6 +588,8 @@ const Sync={
   writeMenu(){ if(this.mode==='cloud') this.db.ref(this.base()+'/menu').set(currentMenu); },
   writeShop(){ if(this.mode==='cloud') this.db.ref(this.base()+'/shop').set(shopChecked); },
   writeCustomItem(r){ if(this.mode==='cloud') this.db.ref(this.base()+'/custom/'+r.id).set(r); },
+  writeFavItem(id){ if(this.mode==='cloud') this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); },
+  removeFavItem(id){ if(this.mode==='cloud') this.db.ref(this.base()+'/favs/'+id).remove(); },
   removeCustomItem(id){ if(this.mode==='cloud') this.db.ref(this.base()+'/custom/'+id).remove(); },
   disconnect(){ try{ if(this.db) this.db.ref(this.base()).off(); }catch(e){} this.mode='local';
     localStorage.removeItem(LS.cfg); localStorage.removeItem(LS.room); updateStatus(); }
@@ -677,6 +684,10 @@ function renderRecipeCards(list){
 }
 function showColombian(){ renderRecipeCards(ALL_RECIPES().map(colToCard)); }
 function showMine(){ const list=customRecipes.map(colToCard); if(list.length) renderRecipeCards(list); else document.getElementById('recipeCards').innerHTML='<div class="loading">Aún no tienes recetas propias. Pulsa “➕ Crear receta” para agregar una.</div>'; }
+function showFavorites(){ const cards=Object.values(favorites).map(f=>{ const r=ALL_RECIPES().find(x=>x.id===f.id); if(r) return colToCard(r); return {id:f.id,source:f.source,nombre:f.nombre,thumb:f.thumb,e:f.e||'🍽️',grad:f.grad||['#15774a','#0f5c39'],badge:'❤️ Favorita',match:null}; });
+  if(cards.length) renderRecipeCards(cards); else document.getElementById('recipeCards').innerHTML='<div class="loading">Aún no tienes recetas favoritas. Pulsa el corazón ❤ en una receta o en el menú.</div>'; }
+function toggleFav(o){ if(!o||o.id==='__empty') return; if(favorites[o.id]){ delete favorites[o.id]; Sync.removeFavItem(o.id); } else { favorites[o.id]={id:o.id,source:o.source,nombre:o.nombre,thumb:o.thumb||null,e:o.e||null,grad:o.grad||null}; Sync.writeFavItem(o.id); }
+  saveFav(); toast(favorites[o.id]?'Guardada en favoritas ❤️':'Quitada de favoritas'); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); }
 async function apiFetch(url){ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),7000); try{ const r=await fetch(url,{signal:ctrl.signal}); return (await r.json()).meals||[]; } finally{ clearTimeout(t); } }
 async function loadApiDetails(id){ if(apiCache[id]) return apiCache[id]; const m=(await apiFetch(API+'lookup.php?i='+id))[0]; if(m) apiCache[id]=m; return m; }
 function apiIngredients(m){ const out=[]; for(let i=1;i<=20;i++){ const n=m['strIngredient'+i],q=m['strMeasure'+i]; if(n&&n.trim()) out.push([n.trim(),(q||'').trim()]); } return out; }
@@ -713,6 +724,7 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
   else if(ch.dataset.filter==='colombia'){ setChip(ch); lastRecipeView=showColombian; showColombian(); }
   else if(ch.dataset.filter==='disponibles'){ setChip(ch); lastRecipeView=showAvailable; showAvailable(); }
   else if(ch.dataset.filter==='mias'){ setChip(ch); lastRecipeView=showMine; showMine(); }
+  else if(ch.dataset.filter==='favs'){ setChip(ch); lastRecipeView=showFavorites; showFavorites(); }
 });
 
 /* ============================================================ MODAL RECETA ============================================================ */
@@ -729,8 +741,9 @@ function openColRecipe(id){ const r=ALL_RECIPES().find(x=>x.id===id); if(!r) ret
     '<div class="tags"><span class="tag">'+badge+'</span>'+(r.tiempo?'<span class="tag">⏱️ '+r.tiempo+'</span>':'')+'<span class="tag">👥 2 porciones</span></div>'+
     '<p class="sec-t">Ingredientes</p><ul class="ing-list">'+r.ing.map(i=>ingRow(i[0],i[1])).join('')+'</ul>'+
     '<p class="sec-t">Preparación</p><ol class="steps">'+r.pasos.map(p=>'<li>'+p+'</li>').join('')+'</ol>'+
-    '<div class="set-actions"><button class="btn" id="addMenuBtn">📅 Añadir al menú</button>'+(r.custom?'<button class="btn ghost" id="delRecipeBtn">🗑️ Eliminar</button>':'')+'</div></div>');
+    '<div class="set-actions"><button class="btn" id="addMenuBtn">📅 Añadir al menú</button><button class="btn ghost" id="favBtn">'+(isFav(r.id)?'❤ En favoritas':'♡ Favorita')+'</button>'+(r.custom?'<button class="btn ghost" id="delRecipeBtn">🗑️ Eliminar</button>':'')+'</div></div>');
   document.getElementById('addMenuBtn').onclick=()=>addColToMenu(r.id);
+  document.getElementById('favBtn').onclick=()=>{ toggleFav({source:'col',id:r.id,nombre:r.nombre,e:r.e,grad:r.grad,thumb:null}); openColRecipe(r.id); };
   if(r.custom) document.getElementById('delRecipeBtn').onclick=()=>deleteCustom(r.id); }
 async function openApiRecipe(id){
   openModal('<div class="loading" style="padding:70px"><span class="spin"></span>Cargando receta…</div>');
@@ -743,8 +756,9 @@ async function openApiRecipe(id){
     '<p class="sec-t">Ingredientes</p><ul class="ing-list">'+ings.map(i=>ingRow(i[0],i[1])).join('')+'</ul>'+
     '<p class="sec-t">Preparación</p><ol class="steps">'+(m.strInstructions||'').split(/\r?\n/).filter(s=>s.trim()).map(s=>'<li>'+s+'</li>').join('')+'</ol>'+
     (m.strYoutube?'<a class="yt" href="'+m.strYoutube+'" target="_blank">▶️ Ver video en YouTube</a>':'')+
-    '<div class="set-actions" style="margin-top:14px"><button class="btn" id="addMenuBtn">📅 Añadir al menú</button></div></div>');
-  document.getElementById('addMenuBtn').onclick=()=>addApiToMenu(m); }
+    '<div class="set-actions" style="margin-top:14px"><button class="btn" id="addMenuBtn">📅 Añadir al menú</button><button class="btn ghost" id="favBtn">'+(isFav(m.idMeal)?'❤ En favoritas':'♡ Favorita')+'</button></div></div>');
+  document.getElementById('addMenuBtn').onclick=()=>addApiToMenu(m);
+  document.getElementById('favBtn').onclick=()=>{ toggleFav({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb}); openApiRecipe(m.idMeal); }; }
 
 /* ============================================================ AÑADIR AL MENÚ / RECETAS PROPIAS ============================================================ */
 function goTab(name){ const t=document.querySelector('.tab[data-tab="'+name+'"]'); if(t) t.click(); }
@@ -911,7 +925,8 @@ function renderMenu(){
     el.addEventListener('dragleave',()=>el.classList.remove('over'));
     el.addEventListener('drop',e=>{ e.preventDefault(); el.classList.remove('over'); if(dragSrc) swapSlots(dragSrc,src); dragSrc=null; });
     el.onclick=e=>{ const b=e.target.closest('.mbtn'); if(b){ e.stopPropagation();
-        if(b.dataset.a==='dup') duplicateSlot(src);
+        if(b.dataset.a==='fav') toggleFav(slotMeal(src));
+        else if(b.dataset.a==='dup') duplicateSlot(src);
         else if(b.dataset.a==='swap') regenSlot(src);
         return; }
       const m=slotMeal(src); m.source==='col'?openColRecipe(m.id):openApiRecipe(m.id); };
@@ -923,7 +938,7 @@ function mealRow(label,m,day,slot){ const g=m.grad||['#15774a','#0f5c39'];
   return '<div class="meal" draggable="true" data-day="'+day+'" data-slot="'+slot+'">'+
     '<div class="mthumb" style="'+bg+'">'+(m.thumb?'':(m.e||'🍽️'))+'</div>'+
     '<div class="minfo"><div class="mlabel">'+label+'</div><div class="mname">'+m.nombre+'</div><div class="mmatch">'+(m.id==='__empty'?'Elige en “Recetas”':m.match+'% con lo que tienes')+'</div></div>'+
-    '<div class="mact"><button class="mbtn" data-a="dup" title="Duplicar en otro día">⧉</button><button class="mbtn" data-a="swap" title="Cambiar por otra">🔁</button></div>'+
+    '<div class="mact">'+(m.id!=='__empty'?'<button class="mbtn fav'+(isFav(m.id)?' on':'')+'" data-a="fav" title="Favorita">'+(isFav(m.id)?'❤':'♡')+'</button>':'')+'<button class="mbtn" data-a="dup" title="Duplicar en otro día">⧉</button><button class="mbtn" data-a="swap" title="Cambiar por otra">🔁</button></div>'+
     '</div>'; }
 function renderShop(){
   const seen={};
@@ -971,6 +986,34 @@ renderPantry(); showColombian(); if(currentMenu){ backfillSalads(); renderMenu()
   .meal.over{background:var(--brand-soft);box-shadow:inset 0 0 0 2px var(--brand)}
   @media (max-width:640px){ .meal .mact{opacity:1} }
   @media print{ .mact,.edithint{display:none!important} }
+  .mbtn.fav.on{color:var(--terra);border-color:#eecabe;background:var(--terra-soft)}
+  @media (max-width:640px){
+    .container{padding:0 14px}
+    .hbar{gap:10px;padding:12px 0}
+    .brandtxt span{display:none}
+    .htools{gap:8px}
+    #syncText{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tabsWrap{padding:12px 8px 4px;overflow-x:auto}
+    .tabs{max-width:none}
+    .tab{padding:9px 13px;font-size:13px}
+    main{padding:18px 0 48px}
+    .phead h2{font-size:22px}
+    .cards{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+    .rthumb{height:120px;font-size:44px}
+    .daygrid,.catgrid{grid-template-columns:1fr;gap:12px}
+    .sheet-body,.set-body{padding:18px}
+    .sheet .hero{height:150px;font-size:60px}
+    .set-actions{flex-direction:column}
+    .set-actions .btn{width:100%;justify-content:center}
+    .mbtn{width:34px;height:34px}
+    .menuctrl select,.toolbar select{width:100%}
+    .ingrow{flex-wrap:wrap}
+    .ingrow .ri-name{flex:1 1 100%!important}
+  }
+  @media (max-width:380px){
+    .tab{padding:8px 10px;font-size:12px;gap:5px}
+    .rpill{font-size:10px;padding:4px 8px}
+  }
 </style>
 </body>
 </html>
