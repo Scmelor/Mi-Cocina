@@ -26,8 +26,8 @@
   .container{max-width:1120px;margin:0 auto;padding:0 20px}
   h1,h2,h3,h4,.display{font-family:'Poppins',Georgia,serif;font-weight:700}
 
-  header{background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
-  .hbar{display:flex;align-items:center;gap:14px;padding:14px 0}
+  header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+  .hbar{display:flex;align-items:center;gap:14px;padding:14px 20px}
   .logo{width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#ffcd34,#ffb703);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 8px 18px -7px rgba(255,183,3,.75);flex:none;overflow:hidden}
   .brandtxt h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1;color:var(--ink)}
   .brandtxt span{font-size:12px;color:var(--muted);font-weight:500}
@@ -229,7 +229,7 @@
       <span class="chip" data-area="Italian">🇮🇹 Italianas</span>
       <span class="chip" data-area="Mexican">🌮 Mexicanas</span>
       <span class="chip" data-area="Spanish">🥘 Españolas</span>
-      <span class="chip" data-area="Chinese">🥢 Chinas</span>
+      <span class="chip" data-filter="venezuela">🇻🇪 Venezolanas</span>
       <span class="chip" data-filter="disponibles">✅ Con lo que tengo</span>
       <span class="chip" data-filter="mias">⭐ Mis recetas</span>
       <span class="chip" data-filter="favs">❤️ Favoritas</span>
@@ -467,6 +467,36 @@ const COL = [
   ing:[['Garbanzo','1 taza','granos'],['Tomate','1 unidad','vegetales'],['Cebolla cabezona','1/2','vegetales'],['Pepino','1/2 unidad','vegetales'],['Limón','1 unidad','frutas'],['Aceite','1 cda','condimentos']],
   pasos:['Escurre los garbanzos cocidos.','Mezcla con tomate, cebolla y pepino.','Aliña con limón, aceite y sal.']}
 ];
+const VEN=[
+ {id:'ven-pabellon',nombre:'Pabellón Criollo',tipo:['almuerzo'],e:'🍛',grad:['#7a2f22','#e0a53a'],tiempo:'60 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Carne de res','400 g (falda)','carnes'],['Arroz','1.5 tazas','cereales'],['Frijol negro','1.5 tazas','granos'],['Plátano maduro','2 unidades','vegetales'],['Cebolla cabezona','1','vegetales'],['Tomate','2 unidades','vegetales'],['Ajo','2 dientes','vegetales']],
+  pasos:['Cocina y desmecha la carne; guísala con hogao.','Prepara arroz blanco y las caraotas.','Fríe las tajadas de plátano maduro.','Sirve los cuatro componentes juntos.']},
+ {id:'ven-arepareina',nombre:'Arepa Reina Pepiada',tipo:['cena'],e:'🫓',grad:['#e0a53a','#8bcf9e'],tiempo:'30 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Harina de maíz (arepa)','2 tazas','cereales'],['Pollo','1 pechuga','carnes'],['Aguacate','1 unidad','frutas'],['Mayonesa','2 cdas','condimentos'],['Cebolla cabezona','1/4','vegetales']],
+  pasos:['Amasa y asa las arepas.','Mezcla pollo desmechado con aguacate, mayonesa y cebolla.','Abre la arepa y rellénala.','Sirve enseguida.']},
+ {id:'ven-cachapa',nombre:'Cachapa con Queso',tipo:['cena'],e:'🌽',grad:['#e0a53a','#f2c96b'],tiempo:'30 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Mazorca','4 unidades','vegetales'],['Queso','200 g','lacteos'],['Mantequilla','1 cda','lacteos'],['Azúcar','1 cda','condimentos'],['Sal','al gusto','condimentos']],
+  pasos:['Licúa el maíz con sal y azúcar.','Vierte en el sartén como tortilla gruesa.','Dora por ambos lados.','Rellena con queso y dobla.']},
+ {id:'ven-carnemechada',nombre:'Carne Mechada',tipo:['almuerzo'],e:'🍖',grad:['#8a2b2b','#e0a53a'],tiempo:'70 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Carne de res','500 g (falda)','carnes'],['Pimentón','1','vegetales'],['Cebolla cabezona','1','vegetales'],['Tomate','2 unidades','vegetales'],['Ajo','3 dientes','vegetales'],['Arroz','1 taza','cereales']],
+  pasos:['Cocina la carne hasta ablandar y desmecha.','Sofríe pimentón, cebolla, tomate y ajo.','Une la carne al sofrito y guisa.','Sirve con arroz.']},
+ {id:'ven-asadonegro',nombre:'Asado Negro',tipo:['almuerzo'],e:'🥩',grad:['#3a2a22','#e0a53a'],tiempo:'90 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Carne de res','700 g (muchacho)','carnes'],['Panela','3 cdas','condimentos'],['Cebolla cabezona','1','vegetales'],['Tomate','2 unidades','vegetales'],['Ajo','3 dientes','vegetales'],['Arroz','1 taza','cereales']],
+  pasos:['Sella la carne en caramelo de panela.','Añade el sofrito y agua; cocina a fuego bajo.','Cuando ablande, corta en rodajas.','Sirve con arroz y la salsa negra.']},
+ {id:'ven-empanadas',nombre:'Empanadas Venezolanas',tipo:['cena'],e:'🥟',grad:['#e08a1e','#c94f2f'],tiempo:'40 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Harina de maíz (arepa)','2 tazas','cereales'],['Carne molida','300 g','carnes'],['Cebolla cabezona','1','vegetales'],['Tomate','1 unidad','vegetales'],['Aceite','para freír','condimentos']],
+  pasos:['Guisa la carne molida con sofrito.','Amasa la harina y forma discos.','Rellena, cierra en media luna y sella.','Fríe hasta dorar.']},
+ {id:'ven-perico',nombre:'Perico Venezolano con Arepa',tipo:['cena'],e:'🍳',grad:['#FCD116','#e0a53a'],tiempo:'20 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Huevo','3 unidades','lacteos'],['Tomate','1 unidad','vegetales'],['Cebolla cabezona','1/2','vegetales'],['Pimentón','1/2','vegetales'],['Harina de maíz (arepa)','1 taza','cereales']],
+  pasos:['Sofríe tomate, cebolla y pimentón.','Añade los huevos y revuelve.','Asa las arepas.','Sirve caliente.']},
+ {id:'ven-caraotas',nombre:'Caraotas Negras con Arroz',tipo:['almuerzo'],e:'🫘',grad:['#2a2a3a','#e0a53a'],tiempo:'50 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Frijol negro','2 tazas','granos'],['Cebolla cabezona','1','vegetales'],['Ajo','2 dientes','vegetales'],['Comino','1 cdta','condimentos'],['Arroz','1 taza','cereales'],['Plátano maduro','1 unidad','vegetales']],
+  pasos:['Cocina las caraotas hasta ablandar.','Añade sofrito de cebolla y ajo con comino.','Prepara arroz blanco y tajadas.','Sirve juntos.']},
+ {id:'ven-polloguisado',nombre:'Pollo Guisado Venezolano',tipo:['almuerzo'],e:'🍗',grad:['#e08a1e','#2e9e5b'],tiempo:'45 min',region:'Venezuela',flag:'🇻🇪',
+  ing:[['Pollo','4 presas','carnes'],['Papa','2 unidades','vegetales'],['Zanahoria','1 unidad','vegetales'],['Tomate','2 unidades','vegetales'],['Cebolla cabezona','1','vegetales'],['Arroz','1 taza','cereales']],
+  pasos:['Sofríe el pollo con cebolla y tomate.','Añade papa y zanahoria en cubos.','Agrega agua y guisa hasta ablandar.','Sirve con arroz.']}
+];
+
 /* ============================================================ NORMALIZACIÓN ============================================================ */
 const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
   .replace(/\(.*?\)/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
@@ -515,7 +545,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -527,12 +557,15 @@ let customCats=JSON.parse(localStorage.getItem(LS.cats)||'[]');
 const BASE_ORDER=['vegetales','frutas','carnes','granos','cereales','lacteos','condimentos','otros'];
 let hiddenBase=new Set(JSON.parse(localStorage.getItem(LS.hidden)||'[]'));
 function saveHidden(){ localStorage.setItem(LS.hidden,JSON.stringify([...hiddenBase])); }
+const BASE_CATS=JSON.parse(JSON.stringify(CATS));
+let catOverrides=JSON.parse(localStorage.getItem(LS.catnames)||'{}');
+function saveOverrides(){ localStorage.setItem(LS.catnames,JSON.stringify(catOverrides)); }
 const customKeys=new Set();
 function saveCats(){ localStorage.setItem(LS.cats,JSON.stringify(customCats)); }
-function rebuildCats(){ CAT_ORDER.length=0; BASE_ORDER.forEach(k=>{ if(!hiddenBase.has(k)) CAT_ORDER.push(k); }); customKeys.forEach(k=>{ delete CATS[k]; }); customKeys.clear(); const oi=CAT_ORDER.indexOf('otros'); let ins=oi<0?CAT_ORDER.length:oi; customCats.forEach(c=>{ CATS[c.key]={n:c.n,e:c.e}; CAT_ORDER.splice(ins++,0,c.key); customKeys.add(c.key); }); }
+function rebuildCats(){ CAT_ORDER.length=0; BASE_ORDER.forEach(k=>{ if(!hiddenBase.has(k)){ const o=catOverrides[k]; CATS[k]={n:(o&&o.n)||BASE_CATS[k].n, e:(o&&o.e)||BASE_CATS[k].e}; CAT_ORDER.push(k); } }); customKeys.forEach(k=>{ delete CATS[k]; }); customKeys.clear(); const oi=CAT_ORDER.indexOf('otros'); let ins=oi<0?CAT_ORDER.length:oi; customCats.forEach(c=>{ CATS[c.key]={n:c.n,e:c.e}; CAT_ORDER.splice(ins++,0,c.key); customKeys.add(c.key); }); }
 rebuildCats();
 let lastRecipeView=showColombian;
-const ALL_RECIPES=()=>COL.concat(customRecipes);
+const ALL_RECIPES=()=>COL.concat(VEN,customRecipes);
 function saveCustom(){ localStorage.setItem(LS.custom,JSON.stringify(customRecipes)); }
 function saveFav(){ localStorage.setItem(LS.fav,JSON.stringify(favorites)); }
 function isFav(id){ return !!favorites[id]; }
@@ -574,6 +607,7 @@ const Sync={
     this.db.ref(b+'/profile').on('value',s=>{ const v=s.val(); if(v){ profile=v; localStorage.setItem(LS.profile,JSON.stringify(profile)); applyProfile(); } });
     this.db.ref(b+'/cats').on('value',s=>{ const v=s.val(); customCats=v?Object.values(v):[]; saveCats(); rebuildCats(); populateCatSelect(); renderPantry(); });
     this.db.ref(b+'/hidden').on('value',s=>{ hiddenBase=new Set(s.val()||[]); saveHidden(); rebuildCats(); populateCatSelect(); renderPantry(); });
+    this.db.ref(b+'/catnames').on('value',s=>{ catOverrides=s.val()||{}; saveOverrides(); rebuildCats(); populateCatSelect(); renderPantry(); });
     updateStatus();
   },
   seedPantry(){ const p={}; PANTRY_DEFAULTS.forEach(([n,c])=>{ p[keyOf(n)]={name:n,cat:c,have:false}; }); this.db.ref(this.base()+'/pantry').set(p); },
@@ -588,6 +622,7 @@ const Sync={
   writeCat(c){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/cats/'+c.key).set(c); }catch(e){} },
   removeCat(key){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/cats/'+key).remove(); }catch(e){} },
   writeHidden(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/hidden').set([...hiddenBase]); }catch(e){} },
+  writeOverride(key){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/catnames/'+key).set(catOverrides[key]); }catch(e){} },
   removeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).remove(); }catch(e){} },
   removeCustomItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+id).remove(); }catch(e){} },
   disconnect(){ try{ if(this.db) this.db.ref(this.base()).off(); }catch(e){} this.mode='local';
@@ -665,8 +700,10 @@ function renderPantry(){
     const items=Object.entries(pantry).filter(([,v])=>v&&(v.cat===cat||(cat==='otros'&&!CAT_ORDER.includes(v.cat))));
     const have=items.filter(([,v])=>v.have).length;
     const card=document.createElement('div'); card.className='catcard';
+    const _edit='<button class="catedit" title="Editar categoría">\u270f\ufe0f</button>';
     const _del=(cat!=='otros')?'<button class="catdel" title="Eliminar categoría">\u2715</button>':'';
-    card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span>'+CATS[cat].n+'<span class="count">'+have+'/'+items.length+'</span>'+_del+'</h3>';
+    card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span>'+CATS[cat].n+'<span class="count">'+have+'/'+items.length+'</span>'+_edit+_del+'</h3>';
+    const _eb=card.querySelector('.catedit'); if(_eb) _eb.onclick=e=>{ e.stopPropagation(); editCategory(cat); };
     if(cat!=='otros'){ const _db=card.querySelector('.catdel'); if(_db) _db.onclick=e=>{ e.stopPropagation(); deleteCategory(cat); }; }
     const box=document.createElement('div'); box.className='items';
     if(!items.length) box.innerHTML='<div class="pantry-empty">Sin ingredientes aún</div>';
@@ -700,6 +737,19 @@ function deleteCategory(key){
   rebuildCats(); populateCatSelect(); renderPantry();
   toast('Categoría eliminada'+(moved?(' \u00b7 '+moved+' pasaron a Otros'):''));
 }
+function editCategory(key){
+  const cur=CATS[key]||{n:'',e:'\ud83c\udff7\ufe0f'};
+  openModal('<div class="set-body"><button class="close" onclick="closeModal()">\u2715</button><h3>Editar categoría</h3>'+
+    '<div class="field"><label>Nombre</label><input id="ecName" value="'+(cur.n||'').replace(/"/g,'&quot;')+'"></div>'+
+    '<div class="field"><label>Emoji</label><input id="ecEmoji" value="'+(cur.e||'')+'" maxlength="4"></div>'+
+    '<div class="set-actions"><button class="btn" id="ecSave">Guardar</button><button class="btn ghost" onclick="closeModal()">Cancelar</button></div></div>');
+  document.getElementById('ecSave').onclick=()=>{
+    const name=document.getElementById('ecName').value.trim()||cur.n; const e=document.getElementById('ecEmoji').value.trim()||cur.e;
+    const cc=customCats.find(c=>c.key===key);
+    if(cc){ cc.n=name; cc.e=e; saveCats(); Sync.writeCat(cc); } else { catOverrides[key]={n:name,e:e}; saveOverrides(); Sync.writeOverride(key); }
+    rebuildCats(); populateCatSelect(); renderPantry(); closeModal(); toast('Categoría actualizada');
+  };
+}
 function openCatForm(){
   openModal('<div class="set-body"><button class="close" onclick="closeModal()">\u2715</button><h3>Nueva categoría</h3>'+
     '<p class="lead" style="margin:2px 0 14px;color:var(--muted);font-size:13.5px">Añade una categoría al mercado (ej. Bebidas, Semillas).</p>'+
@@ -723,7 +773,7 @@ function saveCategory(){
 const API='https://www.themealdb.com/api/json/v1/1/';
 let apiCache=JSON.parse(localStorage.getItem(LS.api)||'{}');
 function colToCard(r){ const have=haveSet(), total=r.ing.length, has=r.ing.filter(i=>have.has(canon(i[0]))).length;
-  return {id:r.id,source:'col',nombre:r.nombre,thumb:null,e:r.e,grad:r.grad,badge:(r.custom?'⭐ '+(r.region||'Mía'):'🇨🇴 '+r.region),match:total?Math.round(has/total*100):0}; }
+  return {id:r.id,source:'col',nombre:r.nombre,thumb:null,e:r.e,grad:r.grad,badge:(r.custom?'⭐ '+(r.region||'Mía'):(r.flag||'🇨🇴')+' '+r.region),match:total?Math.round(has/total*100):0}; }
 function setChip(el){ document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active')); if(el) el.classList.add('active'); }
 function renderRecipeCards(list){
   const box=document.getElementById('recipeCards'); box.innerHTML='';
@@ -739,7 +789,8 @@ function renderRecipeCards(list){
     box.appendChild(card);
   });
 }
-function showColombian(){ renderRecipeCards(ALL_RECIPES().map(colToCard)); }
+function showColombian(){ renderRecipeCards(COL.map(colToCard)); }
+function showVenezolanas(){ renderRecipeCards(VEN.map(colToCard)); }
 function showMine(){ const list=customRecipes.map(colToCard); if(list.length) renderRecipeCards(list); else document.getElementById('recipeCards').innerHTML='<div class="loading">Aún no tienes recetas propias. Pulsa “➕ Crear receta” para agregar una.</div>'; }
 function showFavorites(){ const cards=Object.values(favorites).map(f=>{ const r=ALL_RECIPES().find(x=>x.id===f.id); if(r) return colToCard(r); return {id:f.id,source:f.source,nombre:f.nombre,thumb:f.thumb,e:f.e||'🍽️',grad:f.grad||['#15774a','#0f5c39'],badge:'❤️ Favorita',match:null}; });
   if(cards.length) renderRecipeCards(cards); else document.getElementById('recipeCards').innerHTML='<div class="loading">Aún no tienes recetas favoritas. Pulsa el corazón ❤ en una receta o en el menú.</div>'; }
@@ -782,6 +833,7 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
   else if(ch.dataset.filter==='disponibles'){ setChip(ch); lastRecipeView=showAvailable; showAvailable(); }
   else if(ch.dataset.filter==='mias'){ setChip(ch); lastRecipeView=showMine; showMine(); }
   else if(ch.dataset.filter==='favs'){ setChip(ch); lastRecipeView=showFavorites; showFavorites(); }
+  else if(ch.dataset.filter==='venezuela'){ setChip(ch); lastRecipeView=showVenezolanas; showVenezolanas(); }
 });
 
 /* ============================================================ MODAL RECETA ============================================================ */
@@ -894,7 +946,7 @@ function scoreCol(r){ const have=haveSet(),total=r.ing.length,has=r.ing.filter(i
 function scoreApi(m){ const have=haveSet(),ings=apiIngredients(m),has=ings.filter(i=>have.has(canon(i[0]))).length;
   return {ratio:ings.length?has/ings.length:0,missing:ings.filter(i=>!have.has(canon(i[0])))}; }
 function colCandidate(r){ const s=scoreCol(r); return {source:'col',id:r.id,nombre:r.nombre,e:r.e,grad:r.grad,thumb:null,tipo:r.tipo,ratio:s.ratio,missing:s.missing,protein:proteinOf(r.ing.map(i=>i[0]))}; }
-function buildColPool(){ return ALL_RECIPES().map(colCandidate); }
+function buildColPool(){ return COL.concat(customRecipes).map(colCandidate); }
 
 let genSeq=0, menuEdited=false;
 function apiCandidate(m){ const s=scoreApi(m); return {source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}; }
@@ -1055,6 +1107,8 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
   .mbtn.fav.on{color:var(--terra);border-color:#f0cdb8;background:var(--terra-soft)}
   .catcard h3 .catdel{margin-left:8px;background:none;border:none;color:#c4baa8;cursor:pointer;font-size:13px;padding:3px 6px;border-radius:7px;line-height:1}
   .catcard h3 .catdel:hover{color:var(--terra);background:var(--terra-soft)}
+  .catcard h3 .catedit{margin-left:6px;background:none;border:none;color:#c4baa8;cursor:pointer;font-size:12px;padding:3px 5px;border-radius:7px;line-height:1}
+  .catcard h3 .catedit:hover{color:var(--brand-d);background:var(--brand-soft)}
   .edithint{font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:inline-block}
   .meal{position:relative;cursor:grab}
   .meal:active{cursor:grabbing}
@@ -1067,7 +1121,9 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
   .meal.over{background:var(--brand-soft);box-shadow:inset 0 0 0 2px var(--brand)}
   @media (max-width:640px){
     .container{padding:0 14px}
-    .hbar{gap:10px;padding:12px 0}
+    header{position:fixed;top:0;left:0;right:0;padding-top:env(safe-area-inset-top)}
+    body{padding-top:calc(62px + env(safe-area-inset-top))}
+    .hbar{gap:10px;padding:11px 14px}
     .brandtxt{min-width:0;flex:1}
     .brandtxt span{display:none}
     .brandtxt h1{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
