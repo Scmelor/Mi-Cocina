@@ -533,7 +533,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -664,7 +664,7 @@ document.getElementById('uncheckAll').onclick=()=>{ Object.values(pantry).forEac
 
 /* ============================================================ RECETAS ============================================================ */
 const API='https://www.themealdb.com/api/json/v1/1/';
-let apiCache={};
+let apiCache=JSON.parse(localStorage.getItem(LS.api)||'{}');
 function colToCard(r){ const have=haveSet(), total=r.ing.length, has=r.ing.filter(i=>have.has(canon(i[0]))).length;
   return {id:r.id,source:'col',nombre:r.nombre,thumb:null,e:r.e,grad:r.grad,badge:(r.custom?'⭐ '+(r.region||'Mía'):'🇨🇴 '+r.region),match:total?Math.round(has/total*100):0}; }
 function setChip(el){ document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active')); if(el) el.classList.add('active'); }
@@ -689,7 +689,7 @@ function showFavorites(){ const cards=Object.values(favorites).map(f=>{ const r=
 function toggleFav(o){ if(!o||o.id==='__empty') return; if(favorites[o.id]){ delete favorites[o.id]; Sync.removeFavItem(o.id); } else { favorites[o.id]={id:o.id,source:o.source,nombre:o.nombre,thumb:o.thumb||null,e:o.e||null,grad:o.grad||null}; Sync.writeFavItem(o.id); }
   saveFav(); toast(favorites[o.id]?'Guardada en favoritas ❤️':'Quitada de favoritas'); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); }
 async function apiFetch(url){ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),7000); try{ const r=await fetch(url,{signal:ctrl.signal}); return (await r.json()).meals||[]; } finally{ clearTimeout(t); } }
-async function loadApiDetails(id){ if(apiCache[id]) return apiCache[id]; const m=(await apiFetch(API+'lookup.php?i='+id))[0]; if(m) apiCache[id]=m; return m; }
+async function loadApiDetails(id){ if(apiCache[id]) return apiCache[id]; const m=(await apiFetch(API+'lookup.php?i='+id))[0]; if(m){ apiCache[id]=m; try{ localStorage.setItem(LS.api,JSON.stringify(apiCache)); }catch(e){} } return m; }
 function apiIngredients(m){ const out=[]; for(let i=1;i<=20;i++){ const n=m['strIngredient'+i],q=m['strMeasure'+i]; if(n&&n.trim()) out.push([n.trim(),(q||'').trim()]); } return out; }
 function apiToCard(m){ return {id:m.idMeal,source:'api',nombre:m.strMeal,thumb:m.strMealThumb,badge:'🌍 '+(m.strArea||'Mundo'),match:null,sub:'Receta en vivo · toca para ver'}; }
 async function searchOnline(q){
@@ -845,11 +845,13 @@ async function generateMenu(){
   if(area!=='solo-col'){
     try{
       const areas=area==='mas-mundo'?['Italian','Mexican','Spanish']:['Italian','Mexican'];
-      let pool=[]; for(const a of areas){ const meals=await apiFetch(API+'filter.php?a='+a); pool.push(...meals.slice(0,6)); }
-      pool=pool.sort(()=>Math.random()-.5).slice(0,area==='mas-mundo'?12:8);
-      const settled=await Promise.allSettled(pool.map(p=>loadApiDetails(p.idMeal))); const details=settled.filter(x=>x.status==='fulfilled').map(x=>x.value);
-      details.filter(Boolean).forEach(m=>{ const s=scoreApi(m);
-        cand.push({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}); });
+      const lists=await Promise.all(areas.map(a=>apiFetch(API+'filter.php?a='+a).catch(()=>[])));
+      let pool=[]; lists.forEach(meals=>pool.push(...meals.slice(0,6)));
+      pool=pool.sort(()=>Math.random()-.5).slice(0,area==='mas-mundo'?8:5);
+      const world=[];
+      const jobs=pool.map(pp=>loadApiDetails(pp.idMeal).then(m=>{ if(m){ const s=scoreApi(m); world.push({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}); } }).catch(()=>{}));
+      await Promise.race([Promise.allSettled(jobs), new Promise(r=>setTimeout(r,5000))]);
+      cand.push(...world);
     }catch(e){}
   }
   MENU_POOL=cand;
