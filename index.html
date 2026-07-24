@@ -81,7 +81,9 @@
   .catcard{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--surface);box-shadow:var(--sh-sm)}
   .catcard h3{margin:0;padding:14px 16px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px;background:var(--surface-2);border-bottom:1px solid var(--line);font-family:'Poppins',sans-serif}
   .catcard h3 .ico{width:30px;height:30px;border-radius:9px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
-  .catcard h3 .count{margin-left:auto;font-size:11.5px;color:var(--muted);font-weight:700;font-family:'Inter';background:#fff;border:1px solid var(--line);padding:3px 9px;border-radius:999px}
+  .catcard h3 .count{flex:none;font-size:11.5px;color:var(--muted);font-weight:700;font-family:'Inter';background:#fff;border:1px solid var(--line);padding:3px 9px;border-radius:999px}
+  .catcard h3 .cname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .catcard h3 .cacts{flex:none;display:flex;align-items:center;gap:2px}
   .items{padding:6px 12px;max-height:300px;overflow:auto}
   .item{display:flex;align-items:center;gap:11px;padding:9px 3px;border-bottom:1px solid #f4eee3}
   .item:last-child{border-bottom:none}
@@ -293,6 +295,11 @@
     <button class="btn" id="connectBtn">🔗 Conectar</button>
     <button class="btn ghost" id="disconnectBtn">Desconectar</button>
   </div>
+  <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
+  <h3>Búsqueda avanzada (opcional)</h3>
+  <p class="lead">Conecta Spoonacular para buscar entre miles de recetas. Consigue una clave gratis en spoonacular.com/food-api.</p>
+  <div class="field"><label>Clave API de Spoonacular</label><input id="spoonInp" placeholder="Pega aquí tu API key"><div class="hint">Se guarda solo en este dispositivo.</div></div>
+  <div class="set-actions"><button class="btn" id="saveSpoon">Guardar clave</button><button class="btn ghost" id="clearSpoon">Quitar</button></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
 </div></div></div>
 
@@ -545,7 +552,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',spoon:'micocina_spoon_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -553,6 +560,8 @@ let customRecipes=JSON.parse(localStorage.getItem(LS.custom)||'[]');
 let favorites=JSON.parse(localStorage.getItem(LS.fav)||'{}');
 let profile=JSON.parse(localStorage.getItem(LS.profile)||'{}');
 let pendingPhoto;
+let spoonKey=localStorage.getItem(LS.spoon)||'';
+let spoonCache={};
 let customCats=JSON.parse(localStorage.getItem(LS.cats)||'[]');
 const BASE_ORDER=['vegetales','frutas','carnes','granos','cereales','lacteos','condimentos','otros'];
 let hiddenBase=new Set(JSON.parse(localStorage.getItem(LS.hidden)||'[]'));
@@ -658,6 +667,7 @@ function pfSetPreview(url){ const pv=document.getElementById('pfPreview'); if(pv
 function openSettings(){
   document.getElementById('pfName').value=profile.name||'';
   pendingPhoto=undefined; pfSetPreview(profile.photo||null);
+  document.getElementById('spoonInp').value=spoonKey||'';
   document.getElementById('settings').classList.add('open');
 }
 function fileToDataURL(file,max,cb){ const rd=new FileReader();
@@ -677,6 +687,8 @@ document.getElementById('saveProfile').onclick=()=>{
   saveProfileLS(); Sync.writeProfile(); applyProfile(); toast('Perfil actualizado'); };
 function closeSettings(){ document.getElementById('settings').classList.remove('open'); }
 document.getElementById('gearBtn').onclick=openSettings;
+document.getElementById('saveSpoon').onclick=()=>{ spoonKey=document.getElementById('spoonInp').value.trim(); localStorage.setItem(LS.spoon,spoonKey); toast(spoonKey?'Búsqueda avanzada activada 🌎':'Clave vacía'); };
+document.getElementById('clearSpoon').onclick=()=>{ spoonKey=''; localStorage.removeItem(LS.spoon); document.getElementById('spoonInp').value=''; toast('Clave eliminada'); };
 document.getElementById('bannerSync').onclick=openSettings;
 document.getElementById('settings').onclick=e=>{ if(e.target.id==='settings') closeSettings(); };
 document.getElementById('connectBtn').onclick=()=>{
@@ -702,7 +714,7 @@ function renderPantry(){
     const card=document.createElement('div'); card.className='catcard';
     const _edit='<button class="catedit" title="Editar categoría">\u270f\ufe0f</button>';
     const _del=(cat!=='otros')?'<button class="catdel" title="Eliminar categoría">\u2715</button>':'';
-    card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span>'+CATS[cat].n+'<span class="count">'+have+'/'+items.length+'</span>'+_edit+_del+'</h3>';
+    card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span><span class="cname">'+CATS[cat].n+'</span><span class="count">'+have+'/'+items.length+'</span><span class="cacts">'+_edit+_del+'</span></h3>';
     const _eb=card.querySelector('.catedit'); if(_eb) _eb.onclick=e=>{ e.stopPropagation(); editCategory(cat); };
     if(cat!=='otros'){ const _db=card.querySelector('.catdel'); if(_db) _db.onclick=e=>{ e.stopPropagation(); deleteCategory(cat); }; }
     const box=document.createElement('div'); box.className='items';
@@ -785,7 +797,7 @@ function renderRecipeCards(list){
         '<span class="rpill cat">'+c.badge+'</span>'+
         (c.match!=null?'<span class="rpill match"><span class="dot"></span>'+c.match+'%</span>':'')+'</div>'+
       '<div class="rbody"><h4>'+c.nombre+'</h4><div class="meta">'+(c.sub||'Toca para ver la receta')+'</div></div>';
-    card.onclick=()=> c.source==='col'?openColRecipe(c.id):openApiRecipe(c.id);
+    card.onclick=()=> c.source==='col'?openColRecipe(c.id):c.source==='spoon'?openSpoonRecipe(c.id):openApiRecipe(c.id);
     box.appendChild(card);
   });
 }
@@ -800,18 +812,49 @@ async function apiFetch(url){ const ctrl=new AbortController(); const t=setTimeo
 async function loadApiDetails(id){ if(apiCache[id]) return apiCache[id]; const m=(await apiFetch(API+'lookup.php?i='+id))[0]; if(m){ apiCache[id]=m; try{ localStorage.setItem(LS.api,JSON.stringify(apiCache)); }catch(e){} } return m; }
 function apiIngredients(m){ const out=[]; for(let i=1;i<=20;i++){ const n=m['strIngredient'+i],q=m['strMeasure'+i]; if(n&&n.trim()) out.push([n.trim(),(q||'').trim()]); } return out; }
 function apiToCard(m){ return {id:m.idMeal,source:'api',nombre:m.strMeal,thumb:m.strMealThumb,badge:'🌍 '+(m.strArea||'Mundo'),match:null,sub:'Receta en vivo · toca para ver'}; }
+const SPOON='https://api.spoonacular.com';
+async function apiFetch2(url){ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000); try{ const r=await Promise.race([fetch(url,{signal:ctrl.signal}), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),13000))]); return await r.json(); } finally{ clearTimeout(t); } }
+function scoreNames(names){ const have=haveSet(); const cl=names.filter(Boolean); const has=cl.filter(n=>have.has(canon(n))).length; return {ratio:cl.length?has/cl.length:0, missing:cl.filter(n=>!have.has(canon(n))).map(n=>[n,''])}; }
+function spoonToCard(r){ return {id:String(r.id),source:'spoon',nombre:r.title,thumb:r.image,badge:'🌎 Spoonacular',match:null,sub:'Receta en vivo · toca para ver'}; }
+async function searchSpoon(q){ if(!spoonKey) return []; try{ const r=await apiFetch2(SPOON+'/recipes/complexSearch?number=20&query='+encodeURIComponent(q)+'&apiKey='+spoonKey); return (r&&r.results)||[]; }catch(e){ return []; } }
+async function spoonInfo(id){ if(spoonCache[id]) return spoonCache[id]; const r=await apiFetch2(SPOON+'/recipes/'+id+'/information?includeNutrition=false&apiKey='+spoonKey); if(r&&r.id){ spoonCache[id]=r; } return r; }
+async function openSpoonRecipe(id){
+  openModal('<div class="loading" style="padding:70px"><span class="spin"></span>Cargando receta…</div>');
+  let m; try{ m=await spoonInfo(id); }catch(e){}
+  if(!m||!m.id){ openModal('<div class="loading">No se pudo cargar (revisa tu clave o el límite diario de Spoonacular).</div>'); return; }
+  const ings=(m.extendedIngredients||[]).map(x=>x.name||x.original).filter(Boolean);
+  const steps=[]; if(m.analyzedInstructions&&m.analyzedInstructions[0]&&m.analyzedInstructions[0].steps) m.analyzedInstructions[0].steps.forEach(x=>steps.push(x.step));
+  if(!steps.length && m.instructions) m.instructions.replace(/<[^>]+>/g,'').split(/\.\s+/).forEach(x=>{ if(x.trim()) steps.push(x.trim()); });
+  openModal('<button class="close" onclick="closeModal()">\u2715</button>'+
+    '<div class="hero" style="background-image:url(\''+(m.image||'')+'\')"></div>'+
+    '<div class="sheet-body"><h3>'+m.title+'</h3>'+
+    '<div class="tags"><span class="tag">\ud83c\udf0e Spoonacular</span>'+(m.readyInMinutes?'<span class="tag">\u23f1\ufe0f '+m.readyInMinutes+' min</span>':'')+'</div>'+
+    '<p class="sec-t">Ingredientes</p><ul class="ing-list">'+ings.map(n=>ingRow(n,'')).join('')+'</ul>'+
+    '<p class="sec-t">Preparación</p><ol class="steps">'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>'+
+    (m.sourceUrl?'<a class="yt" href="'+m.sourceUrl+'" target="_blank">\ud83d\udd17 Ver receta completa</a>':'')+
+    '<div class="set-actions" style="margin-top:14px"><button class="btn" id="addMenuBtn">\ud83d\udcc5 Añadir al menú</button></div></div>');
+  document.getElementById('addMenuBtn').onclick=()=>addSpoonToMenu(id);
+}
+function addSpoonToMenu(id){ const m=spoonCache[id]; if(!m) return; const names=(m.extendedIngredients||[]).map(x=>x.name||x.original).filter(Boolean); const s=scoreNames(names); addRecipeToMenu({source:'spoon',id:String(id),nombre:m.title,thumb:m.image,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing}); }
+const ES2EN={pizza:'pizza',pasta:'pasta',espagueti:'spaghetti',spaghetti:'spaghetti',lasana:'lasagne',lasagna:'lasagne',macarrones:'macaroni',pollo:'chicken',carne:'beef',res:'beef',cerdo:'pork',tocino:'bacon',tocineta:'bacon',jamon:'ham',pescado:'fish',salmon:'salmon',atun:'tuna',camaron:'prawn',camarones:'prawn',gamba:'prawn',arroz:'rice',papa:'potato',papas:'potato',patata:'potato',huevo:'egg',huevos:'egg',queso:'cheese',tomate:'tomato',cebolla:'onion',ajo:'garlic',champinon:'mushroom',champinones:'mushroom',hongos:'mushroom',lenteja:'lentil',lentejas:'lentils',frijol:'beans',frijoles:'beans',garbanzo:'chickpea',garbanzos:'chickpea',sopa:'soup',crema:'soup',ensalada:'salad',postre:'dessert',torta:'cake',pastel:'cake',tarta:'pie',chocolate:'chocolate',brownie:'brownie',panqueque:'pancake',panqueques:'pancake',galleta:'cookie',galletas:'cookie',pan:'bread',curry:'curry',hamburguesa:'burger',taco:'taco',tacos:'taco',burrito:'burrito',pavo:'turkey',cordero:'lamb',pato:'duck',mariscos:'seafood',calamar:'squid',aguacate:'avocado',espinaca:'spinach',brocoli:'broccoli',coliflor:'cauliflower',zanahoria:'carrot',maiz:'corn',coco:'coconut',limon:'lemon',naranja:'orange',manzana:'apple',fresa:'strawberry',banano:'banana',platano:'plantain',mango:'mango',helado:'ice cream',arepa:'arepa',risotto:'risotto',paella:'paella',sushi:'sushi',ramen:'ramen',falafel:'falafel',hummus:'hummus'};
+function enTerms(q){ const words=norm(q).split(' ').filter(w=>w.length>2); const set=new Set(); const full=words.map(w=>ES2EN[w]||w).join(' '); if(full) set.add(full); words.forEach(w=>set.add(ES2EN[w]||w)); return [...set]; }
 async function searchOnline(q){
   const box=document.getElementById('recipeCards'); setChip(null); lastRecipeView=null;
   box.innerHTML='<div class="loading"><span class="spin"></span>Buscando “'+q+'” en internet…</div>';
+  const nq=norm(q);
+  const cols=ALL_RECIPES().filter(r=>norm(r.nombre).includes(nq)||r.ing.some(i=>norm(i[0]).includes(nq))).map(colToCard);
+  let meals=[];
   try{
-    let meals=await apiFetch(API+'search.php?s='+encodeURIComponent(q));
-    if(!meals.length) meals=await apiFetch(API+'filter.php?i='+encodeURIComponent(q.replace(/ /g,'_')));
-    const nq=norm(q);
-    const cols=ALL_RECIPES().filter(r=>norm(r.nombre).includes(nq)||r.ing.some(i=>norm(i[0]).includes(nq))).map(colToCard);
-    const apis=meals.slice(0,24).map(apiToCard);
-    renderRecipeCards([...cols,...apis]);
-    if(!cols.length&&!apis.length) box.innerHTML='<div class="loading">Sin resultados para “'+q+'”. Prueba otro término.</div>';
-  }catch(e){ box.innerHTML='<div class="loading">No se pudo conectar. Mostrando recetas colombianas.</div>'; setTimeout(showColombian,1200); }
+    const terms=enTerms(q); const calls=[];
+    terms.forEach(t=>calls.push(apiFetch(API+'search.php?s='+encodeURIComponent(t)).catch(()=>[])));
+    terms.filter(t=>t.indexOf(' ')<0).forEach(t=>calls.push(apiFetch(API+'filter.php?i='+encodeURIComponent(t)).catch(()=>[])));
+    const res=await Promise.all(calls); const seen=new Set();
+    res.forEach(arr=>arr.forEach(m=>{ if(m&&m.idMeal&&!seen.has(m.idMeal)){ seen.add(m.idMeal); meals.push(m); } }));
+  }catch(e){}
+  const apis=meals.slice(0,30).map(apiToCard);
+  let spoon=[]; try{ spoon=(await searchSpoon(q)).map(spoonToCard); }catch(e){}
+  renderRecipeCards([...cols,...spoon,...apis]);
+  if(!cols.length&&!apis.length&&!spoon.length) box.innerHTML='<div class="loading">Sin resultados para “'+q+'”.'+(spoonKey?'':' Activa la búsqueda avanzada (Spoonacular) en \u2699\ufe0f para más resultados.')+'</div>';
 }
 async function browseArea(area,el){
   const box=document.getElementById('recipeCards'); setChip(el); lastRecipeView=null;
@@ -1061,7 +1104,7 @@ function renderMenu(){
         else if(b.dataset.a==='dup') duplicateSlot(src);
         else if(b.dataset.a==='swap') regenSlot(src);
         return; }
-      const m=slotMeal(src); m.source==='col'?openColRecipe(m.id):openApiRecipe(m.id); };
+      const m=slotMeal(src); m.source==='col'?openColRecipe(m.id):m.source==='spoon'?openSpoonRecipe(m.id):openApiRecipe(m.id); };
   });
   area.querySelectorAll('.shopitem input').forEach(cb=>cb.onchange=e=>{ shopChecked[e.target.dataset.k]=e.target.checked; saveShop(); Sync.writeShop(); e.target.closest('.shopitem').classList.toggle('done',e.target.checked); });
 }
@@ -1105,10 +1148,9 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
 </script>
 <style>
   .mbtn.fav.on{color:var(--terra);border-color:#f0cdb8;background:var(--terra-soft)}
-  .catcard h3 .catdel{margin-left:8px;background:none;border:none;color:#c4baa8;cursor:pointer;font-size:13px;padding:3px 6px;border-radius:7px;line-height:1}
-  .catcard h3 .catdel:hover{color:var(--terra);background:var(--terra-soft)}
-  .catcard h3 .catedit{margin-left:6px;background:none;border:none;color:#c4baa8;cursor:pointer;font-size:12px;padding:3px 5px;border-radius:7px;line-height:1}
+  .catcard h3 .catedit,.catcard h3 .catdel{background:none;border:none;color:#b7ad9b;cursor:pointer;font-size:13px;padding:0;border-radius:7px;line-height:1;width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex:none}
   .catcard h3 .catedit:hover{color:var(--brand-d);background:var(--brand-soft)}
+  .catcard h3 .catdel:hover{color:var(--terra);background:var(--terra-soft)}
   .edithint{font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:inline-block}
   .meal{position:relative;cursor:grab}
   .meal:active{cursor:grabbing}
