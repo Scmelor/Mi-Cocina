@@ -28,7 +28,7 @@
 
   header{background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
   .hbar{display:flex;align-items:center;gap:14px;padding:14px 0}
-  .logo{width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#ffcd34,#ffb703);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 8px 18px -7px rgba(255,183,3,.75);flex:none}
+  .logo{width:46px;height:46px;border-radius:15px;background:linear-gradient(135deg,#ffcd34,#ffb703);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 8px 18px -7px rgba(255,183,3,.75);flex:none;overflow:hidden}
   .brandtxt h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.4px;line-height:1;color:var(--ink)}
   .brandtxt span{font-size:12px;color:var(--muted);font-weight:500}
   .htools{margin-left:auto;display:flex;align-items:center;gap:10px}
@@ -211,6 +211,7 @@
       <button class="btn amber" id="addBtn">＋ Agregar</button>
       <button class="btn ghost sm" id="checkAll">Marcar todo</button>
       <button class="btn ghost sm" id="uncheckAll">Desmarcar</button>
+      <button class="btn ghost sm" id="addCatBtn">🏷️ Categoría</button>
     </div>
     <div class="catgrid" id="catGrid"></div>
   </section>
@@ -514,7 +515,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -522,6 +523,11 @@ let customRecipes=JSON.parse(localStorage.getItem(LS.custom)||'[]');
 let favorites=JSON.parse(localStorage.getItem(LS.fav)||'{}');
 let profile=JSON.parse(localStorage.getItem(LS.profile)||'{}');
 let pendingPhoto;
+let customCats=JSON.parse(localStorage.getItem(LS.cats)||'[]');
+const customKeys=new Set();
+function saveCats(){ localStorage.setItem(LS.cats,JSON.stringify(customCats)); }
+function rebuildCats(){ customKeys.forEach(k=>{ delete CATS[k]; const i=CAT_ORDER.indexOf(k); if(i>=0) CAT_ORDER.splice(i,1); }); customKeys.clear(); customCats.forEach(c=>{ if(!CATS[c.key]){ CATS[c.key]={n:c.n,e:c.e}; const oi=CAT_ORDER.indexOf('otros'); CAT_ORDER.splice(oi<0?CAT_ORDER.length:oi,0,c.key); customKeys.add(c.key); } }); }
+rebuildCats();
 let lastRecipeView=showColombian;
 const ALL_RECIPES=()=>COL.concat(customRecipes);
 function saveCustom(){ localStorage.setItem(LS.custom,JSON.stringify(customRecipes)); }
@@ -563,6 +569,7 @@ const Sync={
     this.db.ref(b+'/custom').on('value',s=>{ const v=s.val(); customRecipes=v?Object.values(v):[]; saveCustom(); if(lastRecipeView) lastRecipeView(); });
     this.db.ref(b+'/favs').on('value',s=>{ favorites=s.val()||{}; saveFav(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
     this.db.ref(b+'/profile').on('value',s=>{ const v=s.val(); if(v){ profile=v; localStorage.setItem(LS.profile,JSON.stringify(profile)); applyProfile(); } });
+    this.db.ref(b+'/cats').on('value',s=>{ const v=s.val(); customCats=v?Object.values(v):[]; saveCats(); rebuildCats(); populateCatSelect(); renderPantry(); });
     updateStatus();
   },
   seedPantry(){ const p={}; PANTRY_DEFAULTS.forEach(([n,c])=>{ p[keyOf(n)]={name:n,cat:c,have:false}; }); this.db.ref(this.base()+'/pantry').set(p); },
@@ -574,6 +581,7 @@ const Sync={
   writeCustomItem(r){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+r.id).set(r); }catch(e){} },
   writeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); }catch(e){} },
   writeProfile(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/profile').set(profile); }catch(e){} },
+  writeCat(c){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/cats/'+c.key).set(c); }catch(e){} },
   removeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).remove(); }catch(e){} },
   removeCustomItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+id).remove(); }catch(e){} },
   disconnect(){ try{ if(this.db) this.db.ref(this.base()).off(); }catch(e){} this.mode='local';
@@ -611,11 +619,16 @@ function openSettings(){
   pendingPhoto=undefined; pfSetPreview(profile.photo||null);
   document.getElementById('settings').classList.add('open');
 }
-function fileToDataURL(file,max,cb){ const img=new Image(); const rd=new FileReader();
-  rd.onload=()=>{ img.onload=()=>{ let w=img.width,h=img.height; const sc=Math.min(1,max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
-    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); cb(c.toDataURL('image/jpeg',0.85)); };
-    img.src=rd.result; }; rd.readAsDataURL(file); }
-document.getElementById('pfPhoto').onchange=e=>{ const f=e.target.files[0]; if(f) fileToDataURL(f,160,u=>{ pendingPhoto=u; pfSetPreview(u); }); };
+function fileToDataURL(file,max,cb){ const rd=new FileReader();
+  rd.onerror=()=>cb(null);
+  rd.onload=()=>{ const raw=rd.result; const img=new Image();
+    img.onload=()=>{ try{ let w=img.width||max,h=img.height||max; const sc=Math.min(1,max/Math.max(w,h)); w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
+        const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); cb(c.toDataURL('image/jpeg',0.85)); }
+      catch(err){ cb(raw&&raw.length<900000?raw:null); } };
+    img.onerror=()=>cb(raw&&raw.length<900000?raw:null);
+    img.src=raw; };
+  rd.readAsDataURL(file); }
+document.getElementById('pfPhoto').onchange=e=>{ const f=e.target.files[0]; if(!f) return; fileToDataURL(f,160,u=>{ if(!u){ toast('No pude usar esa imagen. Prueba con una foto JPG o PNG.'); return; } pendingPhoto=u; pfSetPreview(u); }); };
 document.getElementById('pfRemove').onclick=()=>{ pendingPhoto=null; pfSetPreview(null); };
 document.getElementById('saveProfile').onclick=()=>{
   profile.name=document.getElementById('pfName').value.trim();
@@ -637,7 +650,8 @@ function setSt(msg,err){ const st=document.getElementById('syncStatus'); st.clas
 
 /* ============================================================ DESPENSA ============================================================ */
 const catSel=document.getElementById('newCat');
-CAT_ORDER.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=CATS[k].e+' '+CATS[k].n; catSel.appendChild(o); });
+function populateCatSelect(){ catSel.innerHTML=''; CAT_ORDER.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=CATS[k].e+' '+CATS[k].n; catSel.appendChild(o); }); }
+populateCatSelect();
 
 function renderPantry(){
   const grid=document.getElementById('catGrid'); grid.innerHTML='';
@@ -668,6 +682,25 @@ document.getElementById('addBtn').onclick=()=>{
 document.getElementById('newIng').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('addBtn').click(); });
 document.getElementById('checkAll').onclick=()=>{ Object.values(pantry).forEach(v=>v.have=true); savePantry(); Sync.writeAllPantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); };
 document.getElementById('uncheckAll').onclick=()=>{ Object.values(pantry).forEach(v=>v.have=false); savePantry(); Sync.writeAllPantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); };
+document.getElementById('addCatBtn').onclick=openCatForm;
+function openCatForm(){
+  openModal('<div class="set-body"><button class="close" onclick="closeModal()">\u2715</button><h3>Nueva categoría</h3>'+
+    '<p class="lead" style="margin:2px 0 14px;color:var(--muted);font-size:13.5px">Añade una categoría al mercado (ej. Bebidas, Semillas).</p>'+
+    '<div class="field"><label>Nombre</label><input id="catName" placeholder="Ej. Bebidas"></div>'+
+    '<div class="field"><label>Emoji (opcional)</label><input id="catEmoji" placeholder="\ud83e\udd64" maxlength="4"></div>'+
+    '<div class="set-actions"><button class="btn" id="saveCat">Crear categoría</button><button class="btn ghost" onclick="closeModal()">Cancelar</button></div>'+
+    '<div class="statusline err" id="catMsg" style="display:none"></div></div>');
+  document.getElementById('saveCat').onclick=saveCategory;
+}
+function saveCategory(){
+  const msg=document.getElementById('catMsg'); const show=t=>{ msg.style.display='block'; msg.textContent=t; };
+  const name=document.getElementById('catName').value.trim();
+  if(!name) return show('Escribe un nombre para la categoría.');
+  const key='cat_'+keyOf(name);
+  if(CATS[key]||CAT_ORDER.includes(key)||customCats.some(c=>c.key===key)) return show('Ya existe una categoría similar.');
+  const e=document.getElementById('catEmoji').value.trim()||'\ud83c\udff7\ufe0f';
+  const c={key,n:name,e}; customCats.push(c); saveCats(); Sync.writeCat(c); rebuildCats(); populateCatSelect(); renderPantry(); closeModal(); toast('Categoría \u201c'+name+'\u201d creada');
+}
 
 /* ============================================================ RECETAS ============================================================ */
 const API='https://www.themealdb.com/api/json/v1/1/';
@@ -695,7 +728,7 @@ function showFavorites(){ const cards=Object.values(favorites).map(f=>{ const r=
   if(cards.length) renderRecipeCards(cards); else document.getElementById('recipeCards').innerHTML='<div class="loading">Aún no tienes recetas favoritas. Pulsa el corazón ❤ en una receta o en el menú.</div>'; }
 function toggleFav(o){ if(!o||o.id==='__empty') return; if(favorites[o.id]){ delete favorites[o.id]; Sync.removeFavItem(o.id); } else { favorites[o.id]={id:o.id,source:o.source,nombre:o.nombre,thumb:o.thumb||null,e:o.e||null,grad:o.grad||null}; Sync.writeFavItem(o.id); }
   saveFav(); toast(favorites[o.id]?'Guardada en favoritas ❤️':'Quitada de favoritas'); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); }
-async function apiFetch(url){ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),7000); try{ const r=await fetch(url,{signal:ctrl.signal}); return (await r.json()).meals||[]; } finally{ clearTimeout(t); } }
+async function apiFetch(url){ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),12000); try{ const r=await Promise.race([fetch(url,{signal:ctrl.signal}), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),13000))]); return (await r.json()).meals||[]; } finally{ clearTimeout(t); } }
 async function loadApiDetails(id){ if(apiCache[id]) return apiCache[id]; const m=(await apiFetch(API+'lookup.php?i='+id))[0]; if(m){ apiCache[id]=m; try{ localStorage.setItem(LS.api,JSON.stringify(apiCache)); }catch(e){} } return m; }
 function apiIngredients(m){ const out=[]; for(let i=1;i<=20;i++){ const n=m['strIngredient'+i],q=m['strMeasure'+i]; if(n&&n.trim()) out.push([n.trim(),(q||'').trim()]); } return out; }
 function apiToCard(m){ return {id:m.idMeal,source:'api',nombre:m.strMeal,thumb:m.strMealThumb,badge:'🌍 '+(m.strArea||'Mundo'),match:null,sub:'Receta en vivo · toca para ver'}; }
@@ -772,8 +805,10 @@ function goTab(name){ const t=document.querySelector('.tab[data-tab="'+name+'"]'
 function emptyMeal(){ return {source:'col',id:'__empty',nombre:'Sin asignar',e:'➕',grad:['#d7d0c2','#efe9dd'],thumb:null,match:0,missing:[]}; }
 function ensureMenuSkeleton(){ if(currentMenu) return; currentMenu=DIAS.map(d=>({dia:d,almuerzo:emptyMeal(),ensalada:emptyMeal(),cena:emptyMeal()})); }
 function addRecipeToMenu(cand){ ensureMenuSkeleton();
-  pickSlot('Añadir “'+cand.nombre+'” al menú', null, (d,slot)=>{ currentMenu[d][slot]=lite(cand); persistMenu(); renderMenu();
-    toast('Añadida a '+cap(DIAS[d])+' · '+(slot==='almuerzo'?'Almuerzo':slot==='ensalada'?'Ensalada':'Cena')); goTab('menu'); }); }
+  const slot=(cand.tipo&&cand.tipo.includes('ensalada'))?'ensalada':(cand.tipo&&cand.tipo.includes('almuerzo'))?'almuerzo':'cena';
+  const fr=slot==='almuerzo'?'Almuerzo':slot==='ensalada'?'Ensalada':'Cena';
+  pickDay('Añadir “'+cand.nombre+'” ('+fr+')', (d)=>{ currentMenu[d][slot]=lite(cand); persistMenu(); renderMenu();
+    toast('Añadida a '+cap(DIAS[d])+' · '+fr); goTab('menu'); }); }
 function addColToMenu(id){ const r=ALL_RECIPES().find(x=>x.id===id); if(r) addRecipeToMenu(colCandidate(r)); }
 function addApiToMenu(m){ const s=scoreApi(m); addRecipeToMenu({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing}); }
 function deleteCustom(id){ customRecipes=customRecipes.filter(r=>r.id!==id); saveCustom(); Sync.removeCustomItem(id); closeModal(); if(lastRecipeView) lastRecipeView(); toast('Receta eliminada'); }
@@ -850,16 +885,17 @@ async function generateMenu(){
   document.getElementById('menuArea').innerHTML='<div class="loading"><span class="spin"></span>Buscando recetas y armando tu semana…</div>';
   let cand=buildColPool();
   if(area!=='solo-col'){
-    try{
+    const world=[];
+    const worldJob=(async()=>{
       const areas=area==='mas-mundo'?['Italian','Mexican','Spanish']:['Italian','Mexican'];
       const lists=await Promise.all(areas.map(a=>apiFetch(API+'filter.php?a='+a).catch(()=>[])));
       let pool=[]; lists.forEach(meals=>pool.push(...meals.slice(0,6)));
       pool=pool.sort(()=>Math.random()-.5).slice(0,area==='mas-mundo'?8:5);
-      const world=[];
       const jobs=pool.map(pp=>loadApiDetails(pp.idMeal).then(m=>{ if(m){ const s=scoreApi(m); world.push({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}); } }).catch(()=>{}));
-      await Promise.race([Promise.allSettled(jobs), new Promise(r=>setTimeout(r,5000))]);
-      cand.push(...world);
-    }catch(e){}
+      await Promise.race([Promise.allSettled(jobs), new Promise(r=>setTimeout(r,8000))]);
+    })();
+    try{ await Promise.race([worldJob, new Promise(r=>setTimeout(r,60000))]); }catch(e){}
+    cand.push(...world);
   }
   MENU_POOL=cand;
   const colBias=area==='mas-mundo'?1.0:area==='solo-col'?1:1.5;
