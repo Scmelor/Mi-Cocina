@@ -582,6 +582,7 @@ const Sync={
   writeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); }catch(e){} },
   writeProfile(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/profile').set(profile); }catch(e){} },
   writeCat(c){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/cats/'+c.key).set(c); }catch(e){} },
+  removeCat(key){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/cats/'+key).remove(); }catch(e){} },
   removeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).remove(); }catch(e){} },
   removeCustomItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+id).remove(); }catch(e){} },
   disconnect(){ try{ if(this.db) this.db.ref(this.base()).off(); }catch(e){} this.mode='local';
@@ -659,7 +660,9 @@ function renderPantry(){
     const items=Object.entries(pantry).filter(([,v])=>v&&v.cat===cat);
     const have=items.filter(([,v])=>v.have).length;
     const card=document.createElement('div'); card.className='catcard';
-    card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span>'+CATS[cat].n+'<span class="count">'+have+'/'+items.length+'</span></h3>';
+    const _del=customKeys.has(cat)?'<button class="catdel" title="Eliminar categoría">\u2715</button>':'';
+    card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span>'+CATS[cat].n+'<span class="count">'+have+'/'+items.length+'</span>'+_del+'</h3>';
+    if(customKeys.has(cat)){ const _db=card.querySelector('.catdel'); if(_db) _db.onclick=e=>{ e.stopPropagation(); deleteCategory(cat); }; }
     const box=document.createElement('div'); box.className='items';
     if(!items.length) box.innerHTML='<div class="pantry-empty">Sin ingredientes aún</div>';
     items.sort((a,b)=>((a[1].have?1:0)-(b[1].have?1:0))||a[1].name.localeCompare(b[1].name)).forEach(([key,v])=>{
@@ -683,6 +686,13 @@ document.getElementById('newIng').addEventListener('keydown',e=>{ if(e.key==='En
 document.getElementById('checkAll').onclick=()=>{ Object.values(pantry).forEach(v=>v.have=true); savePantry(); Sync.writeAllPantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); };
 document.getElementById('uncheckAll').onclick=()=>{ Object.values(pantry).forEach(v=>v.have=false); savePantry(); Sync.writeAllPantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); };
 document.getElementById('addCatBtn').onclick=openCatForm;
+function deleteCategory(key){
+  let moved=0; Object.values(pantry).forEach(v=>{ if(v.cat===key){ v.cat='otros'; moved++; } });
+  if(moved){ savePantry(); Sync.writeAllPantry(); }
+  customCats=customCats.filter(c=>c.key!==key); saveCats(); Sync.removeCat(key);
+  rebuildCats(); populateCatSelect(); renderPantry();
+  toast('Categoría eliminada'+(moved?(' \u00b7 '+moved+' pasaron a Otros'):''));
+}
 function openCatForm(){
   openModal('<div class="set-body"><button class="close" onclick="closeModal()">\u2715</button><h3>Nueva categoría</h3>'+
     '<p class="lead" style="margin:2px 0 14px;color:var(--muted);font-size:13.5px">Añade una categoría al mercado (ej. Bebidas, Semillas).</p>'+
@@ -807,7 +817,7 @@ function ensureMenuSkeleton(){ if(currentMenu) return; currentMenu=DIAS.map(d=>(
 function addRecipeToMenu(cand){ ensureMenuSkeleton();
   const slot=(cand.tipo&&cand.tipo.includes('ensalada'))?'ensalada':(cand.tipo&&cand.tipo.includes('almuerzo'))?'almuerzo':'cena';
   const fr=slot==='almuerzo'?'Almuerzo':slot==='ensalada'?'Ensalada':'Cena';
-  pickDay('Añadir “'+cand.nombre+'” ('+fr+')', (d)=>{ currentMenu[d][slot]=lite(cand); persistMenu(); renderMenu();
+  pickDay('Añadir “'+cand.nombre+'” ('+fr+')', (d)=>{ currentMenu[d][slot]=lite(cand); menuEdited=true; persistMenu(); renderMenu();
     toast('Añadida a '+cap(DIAS[d])+' · '+fr); goTab('menu'); }); }
 function addColToMenu(id){ const r=ALL_RECIPES().find(x=>x.id===id); if(r) addRecipeToMenu(colCandidate(r)); }
 function addApiToMenu(m){ const s=scoreApi(m); addRecipeToMenu({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing}); }
@@ -879,24 +889,24 @@ function scoreApi(m){ const have=haveSet(),ings=apiIngredients(m),has=ings.filte
 function colCandidate(r){ const s=scoreCol(r); return {source:'col',id:r.id,nombre:r.nombre,e:r.e,grad:r.grad,thumb:null,tipo:r.tipo,ratio:s.ratio,missing:s.missing,protein:proteinOf(r.ing.map(i=>i[0]))}; }
 function buildColPool(){ return ALL_RECIPES().map(colCandidate); }
 
-async function generateMenu(){
-  const area=document.getElementById('worldMix').value;
-  const btn=document.getElementById('genBtn'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>Generando…';
-  document.getElementById('menuArea').innerHTML='<div class="loading"><span class="spin"></span>Buscando recetas y armando tu semana…</div>';
-  let cand=buildColPool();
-  if(area!=='solo-col'){
-    const world=[];
-    const worldJob=(async()=>{
-      const areas=area==='mas-mundo'?['Italian','Mexican','Spanish']:['Italian','Mexican'];
-      const lists=await Promise.all(areas.map(a=>apiFetch(API+'filter.php?a='+a).catch(()=>[])));
-      let pool=[]; lists.forEach(meals=>pool.push(...meals.slice(0,6)));
-      pool=pool.sort(()=>Math.random()-.5).slice(0,area==='mas-mundo'?8:5);
-      const jobs=pool.map(pp=>loadApiDetails(pp.idMeal).then(m=>{ if(m){ const s=scoreApi(m); world.push({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}); } }).catch(()=>{}));
-      await Promise.race([Promise.allSettled(jobs), new Promise(r=>setTimeout(r,8000))]);
-    })();
-    try{ await Promise.race([worldJob, new Promise(r=>setTimeout(r,60000))]); }catch(e){}
-    cand.push(...world);
-  }
+let genSeq=0, menuEdited=false;
+function apiCandidate(m){ const s=scoreApi(m); return {source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}; }
+function addCachedApi(cand){ Object.values(apiCache).forEach(m=>{ if(m&&m.idMeal) cand.push(apiCandidate(m)); }); }
+async function fetchWorldCandidates(area){
+  const world=[];
+  const job=(async()=>{
+    const areas=area==='mas-mundo'?['Italian','Mexican','Spanish']:['Italian','Mexican'];
+    const lists=await Promise.all(areas.map(a=>apiFetch(API+'filter.php?a='+a).catch(()=>[])));
+    let pool=[]; lists.forEach(meals=>pool.push(...meals.slice(0,6)));
+    pool=pool.sort(()=>Math.random()-.5).slice(0,area==='mas-mundo'?8:5);
+    const jobs=pool.map(pp=>loadApiDetails(pp.idMeal).then(m=>{ if(m) world.push(apiCandidate(m)); }).catch(()=>{}));
+    await Promise.race([Promise.allSettled(jobs), new Promise(r=>setTimeout(r,8000))]);
+  })();
+  try{ await Promise.race([job, new Promise(r=>setTimeout(r,60000))]); }catch(e){}
+  return world;
+}
+function buildAndRenderMenu(cand, area){
+  const seen=new Set(); cand=cand.filter(c=>{ if(seen.has(c.id)) return false; seen.add(c.id); return true; });
   MENU_POOL=cand;
   const colBias=area==='mas-mundo'?1.0:area==='solo-col'?1:1.5;
   const weight=(c,slot)=> slot==='ensalada'
@@ -912,8 +922,22 @@ async function generateMenu(){
   const used={},menu=[];
   for(let d=0;d<7;d++){ const alm=pick('almuerzo',used); const ens=pick('ensalada',used); let cen,g=0; do{ cen=pick('cena',used); g++; }while(cen.id===alm.id&&g<6);
     menu.push({dia:DIAS[d],almuerzo:lite(alm),ensalada:lite(ens),cena:lite(cen)}); }
-  currentMenu=menu; shopChecked={}; persistMenu(); Sync.writeShop();
-  renderMenu(); btn.disabled=false; btn.innerHTML='✨ Generar menú semanal'; toast('¡Menú listo! Arrastra o usa los botones para ajustarlo.');
+  currentMenu=menu; shopChecked={}; persistMenu(); Sync.writeShop(); renderMenu();
+}
+async function generateMenu(){
+  const area=document.getElementById('worldMix').value;
+  const btn=document.getElementById('genBtn'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>Generando…';
+  const token=++genSeq; menuEdited=false;
+  let cand=buildColPool(); if(area!=='solo-col') addCachedApi(cand);
+  buildAndRenderMenu(cand, area);
+  btn.disabled=false; btn.innerHTML='✨ Generar menú semanal'; toast('¡Menú listo!');
+  if(area!=='solo-col'){
+    fetchWorldCandidates(area).then(world=>{
+      if(!world.length || token!==genSeq || menuEdited) return;
+      let c2=buildColPool(); addCachedApi(c2); c2.push(...world);
+      buildAndRenderMenu(c2, area); toast('Añadí recetas del mundo 🌍');
+    }).catch(()=>{});
+  }
 }
 function lite(c){ return {source:c.source,id:c.id,nombre:c.nombre,e:c.e||'🍽️',grad:c.grad||['#15774a','#0f5c39'],thumb:c.thumb||null,match:Math.round((c.ratio||0)*100),missing:(c.missing||[]).map(i=>({name:i[0],qty:(i[1]||'')}))}; }
 function persistMenu(){ saveMenu(); Sync.writeMenu(); }
@@ -923,11 +947,11 @@ let dragSrc=null;
 function slotMeal(s){ return currentMenu[s.day][s.slot]; }
 function swapSlots(a,b){ if(a.day===b.day&&a.slot===b.slot) return;
   const A=currentMenu[a.day][a.slot]; currentMenu[a.day][a.slot]=currentMenu[b.day][b.slot]; currentMenu[b.day][b.slot]=A;
-  persistMenu(); renderMenu(); toast('Receta movida'); }
+  menuEdited=true; persistMenu(); renderMenu(); toast('Receta movida'); }
 function duplicateSlot(src){
   const fr=src.slot==='almuerzo'?'Almuerzo':src.slot==='ensalada'?'Ensalada':'Cena';
   pickDay('Duplicar “'+slotMeal(src).nombre+'” ('+fr+')', (d)=>{
-    currentMenu[d][src.slot]=JSON.parse(JSON.stringify(slotMeal(src))); persistMenu(); renderMenu(); toast('Receta duplicada'); });
+    currentMenu[d][src.slot]=JSON.parse(JSON.stringify(slotMeal(src))); menuEdited=true; persistMenu(); renderMenu(); toast('Receta duplicada'); });
 }
 function pickDay(title,cb){
   let opts=''; DIAS.forEach((d,i)=>{ opts+='<option value="'+i+'">'+cap(d)+'</option>'; });
@@ -943,7 +967,7 @@ function regenSlot(src){
   const w=c=>(src.slot==='ensalada'?(c.ratio+0.30):(c.ratio+0.18)*(PROT_W[c.protein||'none']))*(c.source==='col'?1.35:1);
   const tot=av.reduce((s,c)=>s+w(c),0); let r=Math.random()*tot; let picked=av[0];
   for(const c of av){ r-=w(c); if(r<=0){ picked=c; break; } }
-  currentMenu[src.day][slot]=lite(picked); persistMenu(); renderMenu(); toast('Comida cambiada'); }
+  currentMenu[src.day][slot]=lite(picked); menuEdited=true; persistMenu(); renderMenu(); toast('Comida cambiada'); }
 function pickSlot(title,src,cb){
   let opts='';
   DIAS.forEach((d,i)=>['almuerzo','ensalada','cena'].forEach(s=>{ const cur=currentMenu[i][s]; if(!cur) return;
@@ -1018,6 +1042,8 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
 </script>
 <style>
   .mbtn.fav.on{color:var(--terra);border-color:#f0cdb8;background:var(--terra-soft)}
+  .catcard h3 .catdel{margin-left:8px;background:none;border:none;color:#c4baa8;cursor:pointer;font-size:13px;padding:3px 6px;border-radius:7px;line-height:1}
+  .catcard h3 .catdel:hover{color:var(--terra);background:var(--terra-soft)}
   .edithint{font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:inline-block}
   .meal{position:relative;cursor:grab}
   .meal:active{cursor:grabbing}
@@ -1031,9 +1057,14 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
   @media (max-width:640px){
     .container{padding:0 14px}
     .hbar{gap:10px;padding:12px 0}
+    .brandtxt{min-width:0;flex:1}
     .brandtxt span{display:none}
-    .htools{gap:8px}
-    #syncText{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .brandtxt h1{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .logo{width:40px;height:40px;font-size:22px;border-radius:13px}
+    .htools{gap:6px;flex:none}
+    #syncText{display:none}
+    .pill{padding:9px}
+    .iconbtn{width:38px;height:38px}
     main{padding:16px 0 96px}
     .phead h2{font-size:23px}
     .cards{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
