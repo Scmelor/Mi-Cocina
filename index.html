@@ -216,28 +216,28 @@
 <header>
   <div class="container hbar">
     <div class="logo">🍲</div>
-    <div class="brandtxt"><h1>Cocina Vicuy</h1><span>Despensa · Recetas · Menú semanal</span></div>
+    <div class="brandtxt"><h1>Cocina Vicuy</h1><span>Mercado · Recetas · Menú semanal</span></div>
     <div class="htools">
       <button class="pill" id="syncPill"><span class="dot"></span><span id="syncText">Modo local</span></button>
       <button class="iconbtn" id="gearBtn" title="Sincronizar entre dispositivos">⚙️</button>
     </div>
   </div>
   <div class="tabsWrap"><div class="tabs">
-    <button class="tab active" data-tab="despensa">🧺 Despensa</button>
+    <button class="tab active" data-tab="despensa">🧺 Mercado</button>
     <button class="tab" data-tab="recetas">📖 Recetas</button>
     <button class="tab" data-tab="menu">📅 Menú semanal</button>
   </div></div>
 </header>
 
 <div class="banner" id="localBanner">
-  <div class="inner">🔗 <div><b>Modo local:</b> los datos se guardan solo en este dispositivo. Activa la sincronización para compartir tu despensa y menú entre celular y computador.</div>
+  <div class="inner">🔗 <div><b>Modo local:</b> los datos se guardan solo en este dispositivo. Activa la sincronización para compartir tu mercado y menú entre celular y computador.</div>
   <button class="btn amber sm" id="bannerSync">Activar sincronización</button></div>
 </div>
 
 <main class="container">
   <!-- DESPENSA -->
   <section class="panel active" id="p-despensa">
-    <div class="phead"><h2>Mi despensa</h2><p>Marca lo que tienes en casa, agrega lo que quieras y organízalo por categorías. Se usa para armar tu menú.</p></div>
+    <div class="phead"><h2>Mercado</h2><p>Marca lo que tienes en casa, agrega lo que quieras y organízalo por categorías. Se usa para armar tu menú.</p></div>
     <div class="toolbar">
       <input class="grow" id="newIng" placeholder="Agregar ingrediente (ej. papa criolla)…" />
       <select id="newCat"></select>
@@ -283,7 +283,7 @@
     </div>
     <div id="menuArea">
       <div class="empty"><div class="big">📅</div>
-        <p>Aún no has generado tu menú.<br>Marca lo que tienes en <b>Despensa</b> y pulsa <b>Generar menú semanal</b>.</p></div>
+        <p>Aún no has generado tu menú.<br>Marca lo que tienes en <b>Mercado</b> y pulsa <b>Generar menú semanal</b>.</p></div>
     </div>
   </section>
 </main>
@@ -295,7 +295,7 @@
 <div class="modal" id="settings"><div class="sheet"><div class="set-body">
   <button class="close" onclick="closeSettings()">✕</button>
   <h3>Sincronizar entre dispositivos</h3>
-  <p class="lead">Comparte tu despensa, menú y lista de mercado entre tus dispositivos en tiempo real usando Firebase (gratis). Los pasos para obtener la configuración están en el archivo README.</p>
+  <p class="lead">Comparte tu mercado, tu menú y tu lista de compras entre tus dispositivos en tiempo real usando Firebase (gratis). Los pasos para obtener la configuración están en el archivo README.</p>
   <div class="field">
     <label>Código de tu cocina</label>
     <input id="roomInp" placeholder="ej. cocina-silvia" value="casa">
@@ -634,7 +634,7 @@ function renderPantry(){
     card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span>'+CATS[cat].n+'<span class="count">'+have+'/'+items.length+'</span></h3>';
     const box=document.createElement('div'); box.className='items';
     if(!items.length) box.innerHTML='<div class="pantry-empty">Sin ingredientes aún</div>';
-    items.sort((a,b)=>a[1].name.localeCompare(b[1].name)).forEach(([key,v])=>{
+    items.sort((a,b)=>((a[1].have?1:0)-(b[1].have?1:0))||a[1].name.localeCompare(b[1].name)).forEach(([key,v])=>{
       const row=document.createElement('div'); row.className='item'+(v.have?' have':'');
       const id='chk_'+key;
       row.innerHTML='<input type="checkbox" class="chk" id="'+id+'" '+(v.have?'checked':'')+'>'+
@@ -677,7 +677,7 @@ function renderRecipeCards(list){
 }
 function showColombian(){ renderRecipeCards(ALL_RECIPES().map(colToCard)); }
 function showMine(){ const list=customRecipes.map(colToCard); if(list.length) renderRecipeCards(list); else document.getElementById('recipeCards').innerHTML='<div class="loading">Aún no tienes recetas propias. Pulsa “➕ Crear receta” para agregar una.</div>'; }
-async function apiFetch(url){ const r=await fetch(url); return (await r.json()).meals||[]; }
+async function apiFetch(url){ const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),7000); try{ const r=await fetch(url,{signal:ctrl.signal}); return (await r.json()).meals||[]; } finally{ clearTimeout(t); } }
 async function loadApiDetails(id){ if(apiCache[id]) return apiCache[id]; const m=(await apiFetch(API+'lookup.php?i='+id))[0]; if(m) apiCache[id]=m; return m; }
 function apiIngredients(m){ const out=[]; for(let i=1;i<=20;i++){ const n=m['strIngredient'+i],q=m['strMeasure'+i]; if(n&&n.trim()) out.push([n.trim(),(q||'').trim()]); } return out; }
 function apiToCard(m){ return {id:m.idMeal,source:'api',nombre:m.strMeal,thumb:m.strMealThumb,badge:'🌍 '+(m.strArea||'Mundo'),match:null,sub:'Receta en vivo · toca para ver'}; }
@@ -703,7 +703,7 @@ async function browseArea(area,el){
 function showAvailable(){
   const list=ALL_RECIPES().map(colToCard).filter(c=>c.match>=40).sort((a,b)=>b.match-a.match);
   renderRecipeCards(list);
-  if(!list.length) document.getElementById('recipeCards').innerHTML='<div class="loading">Marca más ingredientes en tu despensa para ver sugerencias.</div>';
+  if(!list.length) document.getElementById('recipeCards').innerHTML='<div class="loading">Marca más ingredientes en tu mercado para ver sugerencias.</div>';
 }
 document.getElementById('searchBtn').onclick=()=>{ const q=document.getElementById('searchInp').value.trim(); if(q) searchOnline(q); };
 document.getElementById('newRecipeBtn').onclick=openRecipeForm;
@@ -833,7 +833,7 @@ async function generateMenu(){
       const areas=area==='mas-mundo'?['Italian','Mexican','Spanish']:['Italian','Mexican'];
       let pool=[]; for(const a of areas){ const meals=await apiFetch(API+'filter.php?a='+a); pool.push(...meals.slice(0,6)); }
       pool=pool.sort(()=>Math.random()-.5).slice(0,area==='mas-mundo'?12:8);
-      const details=await Promise.all(pool.map(p=>loadApiDetails(p.idMeal)));
+      const settled=await Promise.allSettled(pool.map(p=>loadApiDetails(p.idMeal))); const details=settled.filter(x=>x.status==='fulfilled').map(x=>x.value);
       details.filter(Boolean).forEach(m=>{ const s=scoreApi(m);
         cand.push({source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}); });
     }catch(e){}
@@ -866,8 +866,17 @@ function swapSlots(a,b){ if(a.day===b.day&&a.slot===b.slot) return;
   const A=currentMenu[a.day][a.slot]; currentMenu[a.day][a.slot]=currentMenu[b.day][b.slot]; currentMenu[b.day][b.slot]=A;
   persistMenu(); renderMenu(); toast('Receta movida'); }
 function duplicateSlot(src){
-  pickSlot('Duplicar “'+slotMeal(src).nombre+'” en otro día', src, (d,slot)=>{
-    currentMenu[d][slot]=JSON.parse(JSON.stringify(slotMeal(src))); persistMenu(); renderMenu(); toast('Receta duplicada'); });
+  const fr=src.slot==='almuerzo'?'Almuerzo':src.slot==='ensalada'?'Ensalada':'Cena';
+  pickDay('Duplicar “'+slotMeal(src).nombre+'” ('+fr+')', (d)=>{
+    currentMenu[d][src.slot]=JSON.parse(JSON.stringify(slotMeal(src))); persistMenu(); renderMenu(); toast('Receta duplicada'); });
+}
+function pickDay(title,cb){
+  let opts=''; DIAS.forEach((d,i)=>{ opts+='<option value="'+i+'">'+cap(d)+'</option>'; });
+  openModal('<div class="set-body"><button class="close" onclick="closeModal()">✕</button><h3>'+title+'</h3>'+
+    '<p class="lead" style="margin:2px 0 14px;color:var(--muted);font-size:13.5px">Se copiará en la misma franja del día que elijas.</p>'+
+    '<div class="field"><label>Día de la semana</label><select id="pickSel">'+opts+'</select></div>'+
+    '<div class="set-actions"><button class="btn" id="pickOk">Confirmar</button><button class="btn ghost" onclick="closeModal()">Cancelar</button></div></div>');
+  document.getElementById('pickOk').onclick=()=>{ const v=+document.getElementById('pickSel').value; closeModal(); cb(v); };
 }
 function regenSlot(src){
   const slot=src.slot; const pool=(MENU_POOL.length?MENU_POOL:buildColPool()).filter(c=>c.tipo.includes(slot));
@@ -889,7 +898,7 @@ function pickSlot(title,src,cb){
 
 function renderMenu(){
   const area=document.getElementById('menuArea');
-  if(!currentMenu){ area.innerHTML='<div class="empty"><div class="big">📅</div><p>Aún no has generado tu menú.<br>Marca lo que tienes en <b>Despensa</b> y pulsa <b>Generar menú semanal</b>.</p></div>'; return; }
+  if(!currentMenu){ area.innerHTML='<div class="empty"><div class="big">📅</div><p>Aún no has generado tu menú.<br>Marca lo que tienes en <b>Mercado</b> y pulsa <b>Generar menú semanal</b>.</p></div>'; return; }
   let html='<div class="edithint">🖐️ Arrastra una comida para moverla o intercambiarla · ⧉ duplicar en otro día · 🔁 cambiar por otra</div><div class="daygrid">';
   currentMenu.forEach((day,i)=>{ html+='<div class="day"><h4>'+day.dia+'</h4>'+mealRow('Almuerzo',day.almuerzo,i,'almuerzo')+(day.ensalada?mealRow('Ensalada',day.ensalada,i,'ensalada'):'')+mealRow('Cena',day.cena,i,'cena')+'</div>'; });
   html+='</div>'+renderShop(); area.innerHTML=html;
