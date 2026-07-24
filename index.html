@@ -515,7 +515,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -524,9 +524,12 @@ let favorites=JSON.parse(localStorage.getItem(LS.fav)||'{}');
 let profile=JSON.parse(localStorage.getItem(LS.profile)||'{}');
 let pendingPhoto;
 let customCats=JSON.parse(localStorage.getItem(LS.cats)||'[]');
+const BASE_ORDER=['vegetales','frutas','carnes','granos','cereales','lacteos','condimentos','otros'];
+let hiddenBase=new Set(JSON.parse(localStorage.getItem(LS.hidden)||'[]'));
+function saveHidden(){ localStorage.setItem(LS.hidden,JSON.stringify([...hiddenBase])); }
 const customKeys=new Set();
 function saveCats(){ localStorage.setItem(LS.cats,JSON.stringify(customCats)); }
-function rebuildCats(){ customKeys.forEach(k=>{ delete CATS[k]; const i=CAT_ORDER.indexOf(k); if(i>=0) CAT_ORDER.splice(i,1); }); customKeys.clear(); customCats.forEach(c=>{ if(!CATS[c.key]){ CATS[c.key]={n:c.n,e:c.e}; const oi=CAT_ORDER.indexOf('otros'); CAT_ORDER.splice(oi<0?CAT_ORDER.length:oi,0,c.key); customKeys.add(c.key); } }); }
+function rebuildCats(){ CAT_ORDER.length=0; BASE_ORDER.forEach(k=>{ if(!hiddenBase.has(k)) CAT_ORDER.push(k); }); customKeys.forEach(k=>{ delete CATS[k]; }); customKeys.clear(); const oi=CAT_ORDER.indexOf('otros'); let ins=oi<0?CAT_ORDER.length:oi; customCats.forEach(c=>{ CATS[c.key]={n:c.n,e:c.e}; CAT_ORDER.splice(ins++,0,c.key); customKeys.add(c.key); }); }
 rebuildCats();
 let lastRecipeView=showColombian;
 const ALL_RECIPES=()=>COL.concat(customRecipes);
@@ -570,6 +573,7 @@ const Sync={
     this.db.ref(b+'/favs').on('value',s=>{ favorites=s.val()||{}; saveFav(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
     this.db.ref(b+'/profile').on('value',s=>{ const v=s.val(); if(v){ profile=v; localStorage.setItem(LS.profile,JSON.stringify(profile)); applyProfile(); } });
     this.db.ref(b+'/cats').on('value',s=>{ const v=s.val(); customCats=v?Object.values(v):[]; saveCats(); rebuildCats(); populateCatSelect(); renderPantry(); });
+    this.db.ref(b+'/hidden').on('value',s=>{ hiddenBase=new Set(s.val()||[]); saveHidden(); rebuildCats(); populateCatSelect(); renderPantry(); });
     updateStatus();
   },
   seedPantry(){ const p={}; PANTRY_DEFAULTS.forEach(([n,c])=>{ p[keyOf(n)]={name:n,cat:c,have:false}; }); this.db.ref(this.base()+'/pantry').set(p); },
@@ -583,6 +587,7 @@ const Sync={
   writeProfile(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/profile').set(profile); }catch(e){} },
   writeCat(c){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/cats/'+c.key).set(c); }catch(e){} },
   removeCat(key){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/cats/'+key).remove(); }catch(e){} },
+  writeHidden(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/hidden').set([...hiddenBase]); }catch(e){} },
   removeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).remove(); }catch(e){} },
   removeCustomItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+id).remove(); }catch(e){} },
   disconnect(){ try{ if(this.db) this.db.ref(this.base()).off(); }catch(e){} this.mode='local';
@@ -657,12 +662,12 @@ populateCatSelect();
 function renderPantry(){
   const grid=document.getElementById('catGrid'); grid.innerHTML='';
   CAT_ORDER.forEach(cat=>{
-    const items=Object.entries(pantry).filter(([,v])=>v&&v.cat===cat);
+    const items=Object.entries(pantry).filter(([,v])=>v&&(v.cat===cat||(cat==='otros'&&!CAT_ORDER.includes(v.cat))));
     const have=items.filter(([,v])=>v.have).length;
     const card=document.createElement('div'); card.className='catcard';
-    const _del=customKeys.has(cat)?'<button class="catdel" title="Eliminar categoría">\u2715</button>':'';
+    const _del=(cat!=='otros')?'<button class="catdel" title="Eliminar categoría">\u2715</button>':'';
     card.innerHTML='<h3><span class="ico">'+CATS[cat].e+'</span>'+CATS[cat].n+'<span class="count">'+have+'/'+items.length+'</span>'+_del+'</h3>';
-    if(customKeys.has(cat)){ const _db=card.querySelector('.catdel'); if(_db) _db.onclick=e=>{ e.stopPropagation(); deleteCategory(cat); }; }
+    if(cat!=='otros'){ const _db=card.querySelector('.catdel'); if(_db) _db.onclick=e=>{ e.stopPropagation(); deleteCategory(cat); }; }
     const box=document.createElement('div'); box.className='items';
     if(!items.length) box.innerHTML='<div class="pantry-empty">Sin ingredientes aún</div>';
     items.sort((a,b)=>((a[1].have?1:0)-(b[1].have?1:0))||a[1].name.localeCompare(b[1].name)).forEach(([key,v])=>{
@@ -687,9 +692,11 @@ document.getElementById('checkAll').onclick=()=>{ Object.values(pantry).forEach(
 document.getElementById('uncheckAll').onclick=()=>{ Object.values(pantry).forEach(v=>v.have=false); savePantry(); Sync.writeAllPantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); };
 document.getElementById('addCatBtn').onclick=openCatForm;
 function deleteCategory(key){
+  if(key==='otros') return;
   let moved=0; Object.values(pantry).forEach(v=>{ if(v.cat===key){ v.cat='otros'; moved++; } });
   if(moved){ savePantry(); Sync.writeAllPantry(); }
-  customCats=customCats.filter(c=>c.key!==key); saveCats(); Sync.removeCat(key);
+  if(customKeys.has(key)){ customCats=customCats.filter(c=>c.key!==key); saveCats(); Sync.removeCat(key); }
+  else { hiddenBase.add(key); saveHidden(); Sync.writeHidden(); }
   rebuildCats(); populateCatSelect(); renderPantry();
   toast('Categoría eliminada'+(moved?(' \u00b7 '+moved+' pasaron a Otros'):''));
 }
@@ -922,22 +929,26 @@ function buildAndRenderMenu(cand, area){
   const used={},menu=[];
   for(let d=0;d<7;d++){ const alm=pick('almuerzo',used); const ens=pick('ensalada',used); let cen,g=0; do{ cen=pick('cena',used); g++; }while(cen.id===alm.id&&g<6);
     menu.push({dia:DIAS[d],almuerzo:lite(alm),ensalada:lite(ens),cena:lite(cen)}); }
-  currentMenu=menu; shopChecked={}; persistMenu(); Sync.writeShop(); renderMenu();
+  currentMenu=menu; shopChecked={}; saveMenu(); saveShop(); renderMenu(); setTimeout(()=>{ Sync.writeMenu(); Sync.writeShop(); },0);
 }
 async function generateMenu(){
-  const area=document.getElementById('worldMix').value;
   const btn=document.getElementById('genBtn'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>Generando…';
-  const token=++genSeq; menuEdited=false;
-  let cand=buildColPool(); if(area!=='solo-col') addCachedApi(cand);
-  buildAndRenderMenu(cand, area);
-  btn.disabled=false; btn.innerHTML='✨ Generar menú semanal'; toast('¡Menú listo!');
-  if(area!=='solo-col'){
-    fetchWorldCandidates(area).then(world=>{
-      if(!world.length || token!==genSeq || menuEdited) return;
-      let c2=buildColPool(); addCachedApi(c2); c2.push(...world);
-      buildAndRenderMenu(c2, area); toast('Añadí recetas del mundo 🌍');
-    }).catch(()=>{});
-  }
+  const reset=()=>{ btn.disabled=false; btn.innerHTML='✨ Generar menú semanal'; };
+  const guard=setTimeout(()=>{ try{ if(!currentMenu) buildAndRenderMenu(buildColPool(),'solo-col'); }catch(e){} reset(); }, 4000);
+  try{
+    const area=document.getElementById('worldMix').value;
+    const token=++genSeq; menuEdited=false;
+    let cand=buildColPool(); if(area!=='solo-col') addCachedApi(cand);
+    buildAndRenderMenu(cand, area);
+    clearTimeout(guard); reset(); toast('¡Menú listo!');
+    if(area!=='solo-col'){
+      fetchWorldCandidates(area).then(world=>{
+        if(!world.length || token!==genSeq || menuEdited) return;
+        let c2=buildColPool(); addCachedApi(c2); c2.push(...world);
+        buildAndRenderMenu(c2, area); toast('Añadí recetas del mundo 🌍');
+      }).catch(()=>{});
+    }
+  }catch(e){ clearTimeout(guard); try{ buildAndRenderMenu(buildColPool(),'solo-col'); }catch(_){} reset(); }
 }
 function lite(c){ return {source:c.source,id:c.id,nombre:c.nombre,e:c.e||'🍽️',grad:c.grad||['#15774a','#0f5c39'],thumb:c.thumb||null,match:Math.round((c.ratio||0)*100),missing:(c.missing||[]).map(i=>({name:i[0],qty:(i[1]||'')}))}; }
 function persistMenu(){ saveMenu(); Sync.writeMenu(); }
@@ -1014,7 +1025,7 @@ function renderShop(){
   currentMenu.forEach(d=>[d.almuerzo,d.ensalada,d.cena].filter(Boolean).forEach(m=>m.missing.forEach(i=>{ const k=canon(i.name); if(!seen[k]) seen[k]={name:i.name,cat:catOf(i.name)}; })));
   const keys=Object.keys(seen);
   if(!keys.length) return '<div class="shop"><h3>🛒 Lista de mercado</h3><p class="lead" style="color:var(--brand-d)">¡Genial! Ya tienes todo lo necesario para la semana. 🎉</p></div>';
-  const byCat={}; keys.forEach(k=>{ const c=seen[k].cat; (byCat[c]=byCat[c]||[]).push({k,name:seen[k].name}); });
+  const byCat={}; keys.forEach(k=>{ const c=CAT_ORDER.includes(seen[k].cat)?seen[k].cat:'otros'; (byCat[c]=byCat[c]||[]).push({k,name:seen[k].name}); });
   let h='<div class="shop"><h3>🛒 Lista de mercado <span class="cnt">'+keys.length+' por comprar</span></h3>'+
     '<p class="lead">Lo que te falta para preparar el menú de esta semana. Marca lo que vayas comprando.</p>';
   CAT_ORDER.forEach(cat=>{ if(!byCat[cat]) return;
@@ -1070,7 +1081,8 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
     .cards{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
     .rthumb{height:132px;font-size:46px}
     .daygrid,.catgrid{grid-template-columns:1fr;gap:12px}
-    .sheet{border-radius:22px}
+    .modal{align-items:flex-start;padding:12px}
+    .sheet{border-radius:22px;max-height:calc(100dvh - 24px)}
     .sheet-body,.set-body{padding:18px}
     .sheet .hero{height:160px;font-size:64px}
     .set-actions{flex-direction:column}
