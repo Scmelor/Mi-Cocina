@@ -38,6 +38,9 @@
   .pill.on .dot{background:var(--ok);box-shadow:0 0 0 3px rgba(18,163,90,.18)}
   .iconbtn{width:40px;height:40px;border-radius:13px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
   .iconbtn:hover{color:var(--ink);border-color:#ddd3c1;background:var(--surface-2)}
+  .logo img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+  .pf-preview{width:62px;height:62px;border-radius:16px;background:linear-gradient(135deg,#ffcd34,#ffb703);display:flex;align-items:center;justify-content:center;font-size:30px;overflow:hidden;flex:none;border:1px solid var(--line)}
+  .pf-preview img{width:100%;height:100%;object-fit:cover}
 
   .tabsWrap{display:flex;justify-content:center;padding:12px 0 8px}
   .tabs{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:5px;gap:4px}
@@ -179,8 +182,8 @@
 <body>
 <header>
   <div class="container hbar">
-    <div class="logo">🍲</div>
-    <div class="brandtxt"><h1>Cocina Vicuy</h1><span>Mercado · Recetas · Menú semanal</span></div>
+    <div class="logo" id="logoBox">🍲</div>
+    <div class="brandtxt"><h1 id="brandName">Cocina Vicuy</h1><span>Mercado · Recetas · Menú semanal</span></div>
     <div class="htools">
       <button class="pill" id="syncPill"><span class="dot"></span><span id="syncText">Modo local</span></button>
       <button class="iconbtn" id="gearBtn" title="Sincronizar entre dispositivos">⚙️</button>
@@ -259,6 +262,20 @@
 
 <div class="modal" id="settings"><div class="sheet"><div class="set-body">
   <button class="close" onclick="closeSettings()">✕</button>
+  <h3>Perfil de la cocina</h3>
+  <p class="lead">Personaliza el nombre y la foto de tu cocina.</p>
+  <div class="field"><label>Nombre de la cocina</label><input id="pfName" placeholder="Cocina Vicuy"></div>
+  <div class="field"><label>Foto</label>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div id="pfPreview" class="pf-preview">🍲</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <input type="file" id="pfPhoto" accept="image/*" style="font-size:12px;padding:8px">
+        <button class="btn ghost sm" id="pfRemove" type="button">Quitar foto</button>
+      </div>
+    </div>
+  </div>
+  <div class="set-actions"><button class="btn" id="saveProfile">Guardar perfil</button></div>
+  <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
   <h3>Sincronizar entre dispositivos</h3>
   <p class="lead">Comparte tu mercado, tu menú y tu lista de compras entre tus dispositivos en tiempo real usando Firebase (gratis). Los pasos para obtener la configuración están en el archivo README.</p>
   <div class="field">
@@ -497,12 +514,14 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
 let customRecipes=JSON.parse(localStorage.getItem(LS.custom)||'[]');
 let favorites=JSON.parse(localStorage.getItem(LS.fav)||'{}');
+let profile=JSON.parse(localStorage.getItem(LS.profile)||'{}');
+let pendingPhoto;
 let lastRecipeView=showColombian;
 const ALL_RECIPES=()=>COL.concat(customRecipes);
 function saveCustom(){ localStorage.setItem(LS.custom,JSON.stringify(customRecipes)); }
@@ -543,6 +562,7 @@ const Sync={
     this.db.ref(b+'/shop').on('value',s=>{ shopChecked=s.val()||{}; saveShop(); renderMenu(); });
     this.db.ref(b+'/custom').on('value',s=>{ const v=s.val(); customRecipes=v?Object.values(v):[]; saveCustom(); if(lastRecipeView) lastRecipeView(); });
     this.db.ref(b+'/favs').on('value',s=>{ favorites=s.val()||{}; saveFav(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
+    this.db.ref(b+'/profile').on('value',s=>{ const v=s.val(); if(v){ profile=v; localStorage.setItem(LS.profile,JSON.stringify(profile)); applyProfile(); } });
     updateStatus();
   },
   seedPantry(){ const p={}; PANTRY_DEFAULTS.forEach(([n,c])=>{ p[keyOf(n)]={name:n,cat:c,have:false}; }); this.db.ref(this.base()+'/pantry').set(p); },
@@ -553,6 +573,7 @@ const Sync={
   writeShop(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/shop').set(shopChecked); }catch(e){} },
   writeCustomItem(r){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+r.id).set(r); }catch(e){} },
   writeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); }catch(e){} },
+  writeProfile(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/profile').set(profile); }catch(e){} },
   removeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).remove(); }catch(e){} },
   removeCustomItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+id).remove(); }catch(e){} },
   disconnect(){ try{ if(this.db) this.db.ref(this.base()).off(); }catch(e){} this.mode='local';
@@ -577,7 +598,29 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   t.classList.add('active'); document.getElementById('p-'+t.dataset.tab).classList.add('active');
 });
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
-function openSettings(){ document.getElementById('settings').classList.add('open'); }
+function saveProfileLS(){ localStorage.setItem(LS.profile,JSON.stringify(profile)); }
+function applyProfile(){
+  const name=(profile.name&&profile.name.trim())||'Cocina Vicuy';
+  const bn=document.getElementById('brandName'); if(bn) bn.textContent=name;
+  document.title=name+' · Recetas y Menú Semanal';
+  const logo=document.getElementById('logoBox'); if(logo) logo.innerHTML=profile.photo?('<img src="'+profile.photo+'" alt="">'):'🍲';
+}
+function pfSetPreview(url){ const pv=document.getElementById('pfPreview'); if(pv) pv.innerHTML=url?('<img src="'+url+'">'):'🍲'; }
+function openSettings(){
+  document.getElementById('pfName').value=profile.name||'';
+  pendingPhoto=undefined; pfSetPreview(profile.photo||null);
+  document.getElementById('settings').classList.add('open');
+}
+function fileToDataURL(file,max,cb){ const img=new Image(); const rd=new FileReader();
+  rd.onload=()=>{ img.onload=()=>{ let w=img.width,h=img.height; const sc=Math.min(1,max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); cb(c.toDataURL('image/jpeg',0.85)); };
+    img.src=rd.result; }; rd.readAsDataURL(file); }
+document.getElementById('pfPhoto').onchange=e=>{ const f=e.target.files[0]; if(f) fileToDataURL(f,160,u=>{ pendingPhoto=u; pfSetPreview(u); }); };
+document.getElementById('pfRemove').onclick=()=>{ pendingPhoto=null; pfSetPreview(null); };
+document.getElementById('saveProfile').onclick=()=>{
+  profile.name=document.getElementById('pfName').value.trim();
+  if(pendingPhoto!==undefined) profile.photo=pendingPhoto;
+  saveProfileLS(); Sync.writeProfile(); applyProfile(); toast('Perfil actualizado'); };
 function closeSettings(){ document.getElementById('settings').classList.remove('open'); }
 document.getElementById('gearBtn').onclick=openSettings;
 document.getElementById('bannerSync').onclick=openSettings;
@@ -929,7 +972,7 @@ function backfillSalads(){ if(!currentMenu) return; let changed=false;
   const pool=buildColPool().filter(c=>c.tipo.includes('ensalada'));
   currentMenu.forEach(d=>{ if(!d.ensalada && pool.length){ d.ensalada=lite(pool[Math.floor(Math.random()*pool.length)]); changed=true; } });
   if(changed) persistMenu(); }
-renderPantry(); showColombian(); if(currentMenu){ backfillSalads(); renderMenu(); }
+applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads(); renderMenu(); }
 (function autoConnect(){
   const cfg=localStorage.getItem(LS.cfg), room=localStorage.getItem(LS.room);
   if(cfg){ document.getElementById('cfgInp').value=cfg; if(room) document.getElementById('roomInp').value=room;
