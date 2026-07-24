@@ -582,15 +582,15 @@ const Sync={
     updateStatus();
   },
   seedPantry(){ const p={}; PANTRY_DEFAULTS.forEach(([n,c])=>{ p[keyOf(n)]={name:n,cat:c,have:false}; }); this.db.ref(this.base()+'/pantry').set(p); },
-  writeItem(k){ if(this.mode==='cloud') this.db.ref(this.base()+'/pantry/'+k).set(pantry[k]); },
-  removeItem(k){ if(this.mode==='cloud') this.db.ref(this.base()+'/pantry/'+k).remove(); },
-  writeAllPantry(){ if(this.mode==='cloud') this.db.ref(this.base()+'/pantry').set(pantry); },
-  writeMenu(){ if(this.mode==='cloud') this.db.ref(this.base()+'/menu').set(currentMenu); },
-  writeShop(){ if(this.mode==='cloud') this.db.ref(this.base()+'/shop').set(shopChecked); },
-  writeCustomItem(r){ if(this.mode==='cloud') this.db.ref(this.base()+'/custom/'+r.id).set(r); },
-  writeFavItem(id){ if(this.mode==='cloud') this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); },
-  removeFavItem(id){ if(this.mode==='cloud') this.db.ref(this.base()+'/favs/'+id).remove(); },
-  removeCustomItem(id){ if(this.mode==='cloud') this.db.ref(this.base()+'/custom/'+id).remove(); },
+  writeItem(k){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/pantry/'+k).set(pantry[k]); }catch(e){} },
+  removeItem(k){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/pantry/'+k).remove(); }catch(e){} },
+  writeAllPantry(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/pantry').set(pantry); }catch(e){} },
+  writeMenu(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/menu').set(currentMenu); }catch(e){} },
+  writeShop(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/shop').set(shopChecked); }catch(e){} },
+  writeCustomItem(r){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+r.id).set(r); }catch(e){} },
+  writeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); }catch(e){} },
+  removeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).remove(); }catch(e){} },
+  removeCustomItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+id).remove(); }catch(e){} },
   disconnect(){ try{ if(this.db) this.db.ref(this.base()).off(); }catch(e){} this.mode='local';
     localStorage.removeItem(LS.cfg); localStorage.removeItem(LS.room); updateStatus(); }
 };
@@ -870,7 +870,7 @@ async function generateMenu(){
   currentMenu=menu; shopChecked={}; persistMenu(); Sync.writeShop();
   renderMenu(); btn.disabled=false; btn.innerHTML='✨ Generar menú semanal'; toast('¡Menú listo! Arrastra o usa los botones para ajustarlo.');
 }
-function lite(c){ return {source:c.source,id:c.id,nombre:c.nombre,e:c.e,grad:c.grad,thumb:c.thumb,match:Math.round((c.ratio||0)*100),missing:(c.missing||[]).map(i=>({name:i[0],qty:i[1]}))}; }
+function lite(c){ return {source:c.source,id:c.id,nombre:c.nombre,e:c.e||'🍽️',grad:c.grad||['#15774a','#0f5c39'],thumb:c.thumb||null,match:Math.round((c.ratio||0)*100),missing:(c.missing||[]).map(i=>({name:i[0],qty:(i[1]||'')}))}; }
 function persistMenu(){ saveMenu(); Sync.writeMenu(); }
 
 /* ----- edición del menú ----- */
