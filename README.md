@@ -1,4 +1,4 @@
-# 🍲 Mi Cocina
+# 🍲 Cocina Vicuy
 
 App web para planear tus comidas: administra tu **despensa**, explora **recetas colombianas y del mundo en vivo**, y genera un **menú semanal** (almuerzo y cena para 1–2 personas) con la **lista de lo que te falta por mercar**. Incluye **sincronización opcional entre varios dispositivos** en tiempo real.
 
