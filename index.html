@@ -309,6 +309,23 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
+/* ================== CONFIGURACIÓN FIJA (opcional) ==================
+   Rellena esto UNA sola vez y la app quedará conectada siempre, en
+   todos los dispositivos, sin tener que sincronizar ni pegar la clave
+   cada vez que la abras desde la pantalla de inicio.
+===================================================================== */
+const MI_FIREBASE = {
+  apiKey: "AIzaSyAFRva8i-PECjBlDmfpm9TIy_g2rmaAJyo",
+  authDomain: "mi-cocina-95404.firebaseapp.com",
+  databaseURL: "https://mi-cocina-95404-default-rtdb.firebaseio.com",
+  projectId: "mi-cocina-95404",
+  storageBucket: "mi-cocina-95404.firebasestorage.app",
+  messagingSenderId: "792097191765",
+  appId: "1:792097191765:web:8d98fc2cf460bbdd2ae1dc"
+};
+const MI_CODIGO = "cocina-silvia";
+const MI_SPOONACULAR = "2ff1a5d87c3740918f6d88a77584b4d4";
+/* =================================================================== */
 /* ============================================================ DATOS ============================================================ */
 const CATS = {
   vegetales:{n:'Vegetales',e:'🥬'}, frutas:{n:'Frutas',e:'🍎'}, carnes:{n:'Carnes y pescados',e:'🍖'},
@@ -560,7 +577,7 @@ let customRecipes=JSON.parse(localStorage.getItem(LS.custom)||'[]');
 let favorites=JSON.parse(localStorage.getItem(LS.fav)||'{}');
 let profile=JSON.parse(localStorage.getItem(LS.profile)||'{}');
 let pendingPhoto;
-let spoonKey=localStorage.getItem(LS.spoon)||'';
+let spoonKey=localStorage.getItem(LS.spoon)|| (typeof MI_SPOONACULAR!=='undefined'&&MI_SPOONACULAR) ||'';
 let spoonCache={};
 let customCats=JSON.parse(localStorage.getItem(LS.cats)||'[]');
 const BASE_ORDER=['vegetales','frutas','carnes','granos','cereales','lacteos','condimentos','otros'];
@@ -1140,10 +1157,13 @@ function backfillSalads(){ if(!currentMenu) return; let changed=false;
   if(changed) persistMenu(); }
 applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads(); renderMenu(); }
 (function autoConnect(){
-  const cfg=localStorage.getItem(LS.cfg), room=localStorage.getItem(LS.room);
-  if(cfg){ document.getElementById('cfgInp').value=cfg; if(room) document.getElementById('roomInp').value=room;
+  let cfg=localStorage.getItem(LS.cfg), room=localStorage.getItem(LS.room);
+  if(!cfg && typeof MI_FIREBASE!=='undefined' && MI_FIREBASE){ cfg=(typeof MI_FIREBASE==='string')?MI_FIREBASE:JSON.stringify(MI_FIREBASE); }
+  if(!room) room=(typeof MI_CODIGO!=='undefined'&&MI_CODIGO)||'casa';
+  if(cfg){ document.getElementById('cfgInp').value=cfg; document.getElementById('roomInp').value=room;
     const r=Sync.connect(cfg,room); if(!r.ok) setSt('⚠️ '+r.err,true); }
   updateStatus();
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 })();
 </script>
 <style>
