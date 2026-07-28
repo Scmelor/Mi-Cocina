@@ -304,7 +304,7 @@
   </div>
   <div class="set-actions"><button class="btn" id="saveRoomBtn">Guardar código</button></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
-  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v14</div>
+  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v15</div>
 </div></div></div>
 
 <div class="toast" id="toast"></div>
@@ -625,7 +625,7 @@ const Sync={
     const b=this.base();
     this.db.ref(b+'/pantry').on('value',s=>{ const v=s.val();
       if(!v){ this.seedPantry(); return; } pantry=v; savePantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); });
-    this.db.ref(b+'/menu').on('value',s=>{ let v=s.val(); if(v&&!Array.isArray(v)) v=Object.values(v); if(v){ currentMenu=v; saveMenu(); } else if(currentMenu){ this.writeMenu(); } renderMenu(); });
+    this.db.ref(b+'/menu').on('value',s=>{ const v=normMenu(s.val()); if(v){ currentMenu=v; saveMenu(); } else if(currentMenu){ this.writeMenu(); } renderMenu(); });
     this.db.ref(b+'/shop').on('value',s=>{ const v=s.val(); if(v){ shopChecked=v; saveShop(); } else if(shopChecked&&Object.keys(shopChecked).length){ this.writeShop(); } renderMenu(); });
     this.db.ref(b+'/custom').on('value',s=>{ const v=s.val(); customRecipes=v?Object.values(v):[]; saveCustom(); if(lastRecipeView) lastRecipeView(); });
     this.db.ref(b+'/history').on('value',s=>{ const v=s.val(); history=v?Object.values(v):[]; saveHist(); renderHistory(); });
@@ -1101,6 +1101,19 @@ function pickSlot(title,src,cb){
   document.getElementById('pickOk').onclick=()=>{ const v=document.getElementById('pickSel').value.split('|'); closeModal(); cb(+v[0],v[1]); };
 }
 
+function normMeal(m){
+  if(!m||typeof m!=='object') return {source:'col',id:'__empty',nombre:'Sin asignar',e:'➕',grad:['#d7d0c2','#efe9dd'],thumb:null,match:0,missing:[]};
+  m.missing = Array.isArray(m.missing) ? m.missing.map(i=>Array.isArray(i)?{name:i[0],qty:i[1]||''}:{name:(i&&i.name)||'',qty:(i&&i.qty)||''}) : [];
+  m.grad = Array.isArray(m.grad) ? m.grad : ['#15774a','#0f5c39'];
+  if(m.match==null) m.match=0;
+  return m;
+}
+function normMenu(v){
+  if(!v) return null;
+  let arr = Array.isArray(v) ? v : Object.values(v);
+  if(!arr.length) return null;
+  return arr.map(d=>({dia:(d&&d.dia)||'', almuerzo:normMeal(d&&d.almuerzo), ensalada:normMeal(d&&d.ensalada), cena:normMeal(d&&d.cena)}));
+}
 function renderMenu(){
   const area=document.getElementById('menuArea');
   if(!currentMenu){ area.innerHTML='<div class="empty"><div class="big">📅</div><p>Aún no has generado tu menú.<br>Marca lo que tienes en <b>Mercado</b> y pulsa <b>Generar menú semanal</b>.</p></div>'; return; }
@@ -1133,7 +1146,7 @@ function mealRow(label,m,day,slot){ const g=m.grad||['#15774a','#0f5c39'];
     '</div>'; }
 function renderShop(){
   const seen={};
-  currentMenu.forEach(d=>[d.almuerzo,d.ensalada,d.cena].filter(Boolean).forEach(m=>m.missing.forEach(i=>{ const k=canon(i.name); if(!seen[k]) seen[k]={name:i.name,cat:catOf(i.name)}; })));
+  currentMenu.forEach(d=>[d.almuerzo,d.ensalada,d.cena].filter(Boolean).forEach(m=>(m.missing||[]).forEach(i=>{ const k=canon(i.name); if(!seen[k]) seen[k]={name:i.name,cat:catOf(i.name)}; })));
   const keys=Object.keys(seen);
   if(!keys.length) return '<div class="shop"><h3>🛒 Lista de mercado</h3><p class="lead" style="color:var(--brand-d)">¡Genial! Ya tienes todo lo necesario para la semana. 🎉</p></div>';
   const byCat={}; keys.forEach(k=>{ const c=CAT_ORDER.includes(seen[k].cat)?seen[k].cat:'otros'; (byCat[c]=byCat[c]||[]).push({k,name:seen[k].name}); });
@@ -1174,7 +1187,7 @@ function backfillSalads(){ if(!currentMenu) return; let changed=false;
   const pool=buildColPool().filter(c=>c.tipo.includes('ensalada'));
   currentMenu.forEach(d=>{ if(!d.ensalada && pool.length){ d.ensalada=lite(pool[Math.floor(Math.random()*pool.length)]); changed=true; } });
   if(changed) persistMenu(); }
-applyProfile(); renderPantry(); showColombian(); renderHistory(); if(currentMenu){ backfillSalads(); renderMenu(); }
+applyProfile(); renderPantry(); showColombian(); renderHistory(); currentMenu=normMenu(currentMenu); if(currentMenu){ backfillSalads(); renderMenu(); }
 (function autoConnect(){
   let cfg=localStorage.getItem(LS.cfg), room=localStorage.getItem(LS.room);
   if(!cfg && typeof MI_FIREBASE!=='undefined' && MI_FIREBASE){ cfg=(typeof MI_FIREBASE==='string')?MI_FIREBASE:JSON.stringify(MI_FIREBASE); }
