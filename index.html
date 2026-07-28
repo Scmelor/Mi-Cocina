@@ -288,27 +288,14 @@
   </div>
   <div class="set-actions"><button class="btn" id="saveProfile">Guardar perfil</button></div>
   <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
-  <h3>Sincronizar entre dispositivos</h3>
-  <p class="lead">Comparte tu mercado, tu menú y tu lista de compras entre tus dispositivos en tiempo real usando Firebase (gratis). Los pasos para obtener la configuración están en el archivo README.</p>
+  <h3>Código de cocina</h3>
+  <p class="lead">Este código es tu “sala” privada: úsalo igual en todos tus dispositivos para compartir mercado, menú y recetas. Si eliges uno difícil de adivinar, nadie más podrá verlas ni modificarlas.</p>
   <div class="field">
     <label>Código de tu cocina</label>
-    <input id="roomInp" placeholder="ej. cocina-silvia" value="casa">
-    <div class="hint">Usa el mismo código en todos los dispositivos que quieras conectar.</div>
+    <input id="roomInp" placeholder="ej. cocina-silvia-2024">
+    <div class="hint">Recomendado: algo único y personal (puedes incluir números).</div>
   </div>
-  <div class="field">
-    <label>Configuración de Firebase</label>
-    <textarea id="cfgInp" placeholder='Pega aquí el objeto firebaseConfig, por ejemplo:&#10;{&#10;  apiKey: "…",&#10;  authDomain: "…",&#10;  databaseURL: "https://….firebasedatabase.app",&#10;  projectId: "…",&#10;  appId: "…"&#10;}'></textarea>
-    <div class="hint">Debe incluir <b>databaseURL</b> (Realtime Database).</div>
-  </div>
-  <div class="set-actions">
-    <button class="btn" id="connectBtn">🔗 Conectar</button>
-    <button class="btn ghost" id="disconnectBtn">Desconectar</button>
-  </div>
-  <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
-  <h3>Búsqueda avanzada (opcional)</h3>
-  <p class="lead">Conecta Spoonacular para buscar entre miles de recetas. Consigue una clave gratis en spoonacular.com/food-api.</p>
-  <div class="field"><label>Clave API de Spoonacular</label><input id="spoonInp" placeholder="Pega aquí tu API key"><div class="hint">Se guarda solo en este dispositivo.</div></div>
-  <div class="set-actions"><button class="btn" id="saveSpoon">Guardar clave</button><button class="btn ghost" id="clearSpoon">Quitar</button></div>
+  <div class="set-actions"><button class="btn" id="saveRoomBtn">Guardar código</button></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
 </div></div></div>
 
@@ -635,8 +622,8 @@ const Sync={
     const b=this.base();
     this.db.ref(b+'/pantry').on('value',s=>{ const v=s.val();
       if(!v){ this.seedPantry(); return; } pantry=v; savePantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); });
-    this.db.ref(b+'/menu').on('value',s=>{ currentMenu=s.val()||null; saveMenu(); renderMenu(); });
-    this.db.ref(b+'/shop').on('value',s=>{ shopChecked=s.val()||{}; saveShop(); renderMenu(); });
+    this.db.ref(b+'/menu').on('value',s=>{ const v=s.val(); if(v){ currentMenu=v; saveMenu(); } else if(currentMenu){ this.writeMenu(); } renderMenu(); });
+    this.db.ref(b+'/shop').on('value',s=>{ const v=s.val(); if(v){ shopChecked=v; saveShop(); } else if(shopChecked&&Object.keys(shopChecked).length){ this.writeShop(); } renderMenu(); });
     this.db.ref(b+'/custom').on('value',s=>{ const v=s.val(); customRecipes=v?Object.values(v):[]; saveCustom(); if(lastRecipeView) lastRecipeView(); });
     this.db.ref(b+'/favs').on('value',s=>{ favorites=s.val()||{}; saveFav(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
     this.db.ref(b+'/profile').on('value',s=>{ const v=s.val(); if(v){ profile=v; localStorage.setItem(LS.profile,JSON.stringify(profile)); applyProfile(); } });
@@ -693,7 +680,7 @@ function pfSetPreview(url){ const pv=document.getElementById('pfPreview'); if(pv
 function openSettings(){
   document.getElementById('pfName').value=profile.name||'';
   pendingPhoto=undefined; pfSetPreview(profile.photo||null);
-  document.getElementById('spoonInp').value=spoonKey||'';
+  document.getElementById('roomInp').value=(localStorage.getItem(LS.room)||(typeof MI_CODIGO!=='undefined'&&MI_CODIGO)||'');
   document.getElementById('settings').classList.add('open');
 }
 function fileToDataURL(file,max,cb){ const rd=new FileReader();
@@ -713,18 +700,15 @@ document.getElementById('saveProfile').onclick=()=>{
   saveProfileLS(); Sync.writeProfile(); applyProfile(); toast('Perfil actualizado'); };
 function closeSettings(){ document.getElementById('settings').classList.remove('open'); }
 document.getElementById('gearBtn').onclick=openSettings;
-document.getElementById('saveSpoon').onclick=()=>{ spoonKey=document.getElementById('spoonInp').value.trim(); localStorage.setItem(LS.spoon,spoonKey); toast(spoonKey?'Búsqueda avanzada activada 🌎':'Clave vacía'); };
-document.getElementById('clearSpoon').onclick=()=>{ spoonKey=''; localStorage.removeItem(LS.spoon); document.getElementById('spoonInp').value=''; toast('Clave eliminada'); };
 document.getElementById('bannerSync').onclick=openSettings;
 document.getElementById('settings').onclick=e=>{ if(e.target.id==='settings') closeSettings(); };
-document.getElementById('connectBtn').onclick=()=>{
-  const cfg=document.getElementById('cfgInp').value.trim(), room=document.getElementById('roomInp').value.trim();
-  if(!cfg){ setSt('Pega tu configuración de Firebase primero.',true); return; }
-  const r=Sync.connect(cfg,room);
-  if(r.ok){ setSt('✅ Conectado. Sincronizando…',false); toast('Sincronización activada'); }
-  else setSt('⚠️ '+r.err,true);
+document.getElementById('saveRoomBtn').onclick=()=>{
+  const code=document.getElementById('roomInp').value.trim() || (typeof MI_CODIGO!=='undefined'&&MI_CODIGO) || 'casa';
+  localStorage.setItem(LS.room, code);
+  try{ if(Sync.db) Sync.db.ref(Sync.base()).off(); }catch(e){}
+  if(typeof MI_FIREBASE!=='undefined' && MI_FIREBASE){ const r=Sync.connect((typeof MI_FIREBASE==='string')?MI_FIREBASE:JSON.stringify(MI_FIREBASE), code); if(!r.ok) setSt('⚠️ '+r.err,true); else setSt('✅ Conectado a “'+code+'”',false); }
+  updateStatus(); toast('Código de cocina: '+code); closeSettings();
 };
-document.getElementById('disconnectBtn').onclick=()=>{ Sync.disconnect(); setSt('Desconectado. Modo local.',false); toast('Sincronización desactivada'); };
 function setSt(msg,err){ const st=document.getElementById('syncStatus'); st.className='statusline'+(err?' err':''); st.textContent=msg; }
 
 /* ============================================================ DESPENSA ============================================================ */
@@ -1169,7 +1153,7 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
   let cfg=localStorage.getItem(LS.cfg), room=localStorage.getItem(LS.room);
   if(!cfg && typeof MI_FIREBASE!=='undefined' && MI_FIREBASE){ cfg=(typeof MI_FIREBASE==='string')?MI_FIREBASE:JSON.stringify(MI_FIREBASE); }
   if(!room) room=(typeof MI_CODIGO!=='undefined'&&MI_CODIGO)||'casa';
-  if(cfg){ document.getElementById('cfgInp').value=cfg; document.getElementById('roomInp').value=room;
+  if(cfg){ const _ri=document.getElementById('roomInp'); if(_ri) _ri.value=room;
     const r=Sync.connect(cfg,room); if(!r.ok) setSt('⚠️ '+r.err,true); }
   updateStatus();
   try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
