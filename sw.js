@@ -1,5 +1,5 @@
-/* Cocina Vicuy · Service Worker (PWA offline) */
-const CACHE = 'cocina-vicuy-v1';
+/* Cocina Vicuy · Service Worker (PWA) */
+const CACHE = 'cocina-vicuy-v2';
 const SHELL = [
   './',
   './index.html',
@@ -31,22 +31,38 @@ self.addEventListener('activate', e => {
   );
 });
 
+self.addEventListener('message', e => { if (e.data === 'skipWaiting') self.skipWaiting(); });
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   let url;
   try { url = new URL(req.url); } catch (_) { return; }
 
-  // APIs y base de datos: siempre a la red (no cachear)
+  // APIs y base de datos: siempre a la red (no cachear ni interferir)
   const live = ['themealdb.com', 'spoonacular.com', 'firebaseio.com', 'firebasedatabase.app'];
   if (live.some(h => url.hostname.indexOf(h) >= 0)) return;
 
-  // App shell: cache-first, con respaldo a la red y a index.html si no hay conexión
+  // HTML / navegación: PRIMERO LA RED (así ves siempre la última versión), caché solo de respaldo
+  const isHTML = req.mode === 'navigate' || req.destination === 'document' ||
+                 url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
+  if (isHTML) {
+    e.respondWith(
+      fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put('./index.html', copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match(req).then(h => h || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Íconos, fuentes y scripts: caché primero (cambian poco)
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
       return res;
-    }).catch(() => caches.match('./index.html')))
+    }).catch(() => hit))
   );
 });
