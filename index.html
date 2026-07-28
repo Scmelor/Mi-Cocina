@@ -204,6 +204,7 @@
     <button class="tab active" data-tab="despensa"><span class="ti">🧺</span><span class="tl">Mercado</span></button>
     <button class="tab" data-tab="recetas"><span class="ti">📖</span><span class="tl">Recetas</span></button>
     <button class="tab" data-tab="menu"><span class="ti">📅</span><span class="tl">Menú</span></button>
+    <button class="tab" data-tab="historial"><span class="ti">📚</span><span class="tl">Historial</span></button>
   </div></div>
 </header>
 
@@ -259,12 +260,18 @@
         <option value="mas-mundo">Más recetas del mundo</option>
       </select>
       <button class="btn" id="genBtn">✨ Generar menú semanal</button>
+      <button class="btn ghost sm" id="saveWeekBtn">💾 Guardar semana</button>
       <button class="btn ghost sm" id="printBtn">🖨️ Imprimir / PDF</button>
     </div>
     <div id="menuArea">
       <div class="empty"><div class="big">📅</div>
         <p>Aún no has generado tu menú.<br>Marca lo que tienes en <b>Mercado</b> y pulsa <b>Generar menú semanal</b>.</p></div>
     </div>
+  </section>
+
+  <section class="panel" id="p-historial">
+    <div class="phead"><h2>Historial semanal</h2><p>Las semanas que guardaste quedan aquí. Genera un menú y pulsa “Guardar semana” para añadir la actual. Puedes reutilizar cualquiera.</p></div>
+    <div id="histArea"></div>
   </section>
 </main>
 
@@ -297,6 +304,7 @@
   </div>
   <div class="set-actions"><button class="btn" id="saveRoomBtn">Guardar código</button></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
+  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v14</div>
 </div></div></div>
 
 <div class="toast" id="toast"></div>
@@ -312,7 +320,7 @@
 ===================================================================== */
 /* Claves codificadas (para que GitHub no bloquee la subida). Se decodifican al abrir. */
 const MI_FIREBASE = JSON.parse(atob("eyJhcGlLZXkiOiJBSXphU3lBRlJ2YThpLVBFQ2pCbERtZnBtOVRJeV9nMnJtYUFKeW8iLCJhdXRoRG9tYWluIjoibWktY29jaW5hLTk1NDA0LmZpcmViYXNlYXBwLmNvbSIsImRhdGFiYXNlVVJMIjoiaHR0cHM6Ly9taS1jb2NpbmEtOTU0MDQtZGVmYXVsdC1ydGRiLmZpcmViYXNlaW8uY29tIiwicHJvamVjdElkIjoibWktY29jaW5hLTk1NDA0Iiwic3RvcmFnZUJ1Y2tldCI6Im1pLWNvY2luYS05NTQwNC5maXJlYmFzZXN0b3JhZ2UuYXBwIiwibWVzc2FnaW5nU2VuZGVySWQiOiI3OTIwOTcxOTE3NjUiLCJhcHBJZCI6IjE6NzkyMDk3MTkxNzY1OndlYjo4ZDk4ZmMyY2Y0NjBiYmRkMmFlMWRjIn0="));
-const MI_CODIGO = "cocina-silvia";
+const MI_CODIGO = "cocina";
 const MI_SPOONACULAR = atob("MmZmMWE1ZDg3YzM3NDA5MThmNmQ4OGE3NzU4NGI0ZDQ=");
 /* =================================================================== */
 /* ============================================================ DATOS ============================================================ */
@@ -558,7 +566,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',spoon:'micocina_spoon_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',spoon:'micocina_spoon_v1',hist:'micocina_hist_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -568,6 +576,8 @@ let profile=JSON.parse(localStorage.getItem(LS.profile)||'{}');
 let pendingPhoto;
 let spoonKey=localStorage.getItem(LS.spoon)|| (typeof MI_SPOONACULAR!=='undefined'&&MI_SPOONACULAR) ||'';
 let spoonCache={};
+let history=JSON.parse(localStorage.getItem(LS.hist)||'[]');
+function saveHist(){ localStorage.setItem(LS.hist,JSON.stringify(history)); }
 let customCats=JSON.parse(localStorage.getItem(LS.cats)||'[]');
 const BASE_ORDER=['vegetales','frutas','carnes','granos','cereales','lacteos','condimentos','otros'];
 let hiddenBase=new Set(JSON.parse(localStorage.getItem(LS.hidden)||'[]'));
@@ -615,9 +625,10 @@ const Sync={
     const b=this.base();
     this.db.ref(b+'/pantry').on('value',s=>{ const v=s.val();
       if(!v){ this.seedPantry(); return; } pantry=v; savePantry(); renderPantry(); if(lastRecipeView) lastRecipeView(); });
-    this.db.ref(b+'/menu').on('value',s=>{ const v=s.val(); if(v){ currentMenu=v; saveMenu(); } else if(currentMenu){ this.writeMenu(); } renderMenu(); });
+    this.db.ref(b+'/menu').on('value',s=>{ let v=s.val(); if(v&&!Array.isArray(v)) v=Object.values(v); if(v){ currentMenu=v; saveMenu(); } else if(currentMenu){ this.writeMenu(); } renderMenu(); });
     this.db.ref(b+'/shop').on('value',s=>{ const v=s.val(); if(v){ shopChecked=v; saveShop(); } else if(shopChecked&&Object.keys(shopChecked).length){ this.writeShop(); } renderMenu(); });
     this.db.ref(b+'/custom').on('value',s=>{ const v=s.val(); customRecipes=v?Object.values(v):[]; saveCustom(); if(lastRecipeView) lastRecipeView(); });
+    this.db.ref(b+'/history').on('value',s=>{ const v=s.val(); history=v?Object.values(v):[]; saveHist(); renderHistory(); });
     this.db.ref(b+'/favs').on('value',s=>{ favorites=s.val()||{}; saveFav(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
     this.db.ref(b+'/profile').on('value',s=>{ const v=s.val(); if(v){ profile=v; localStorage.setItem(LS.profile,JSON.stringify(profile)); applyProfile(); } });
     this.db.ref(b+'/cats').on('value',s=>{ const v=s.val(); customCats=v?Object.values(v):[]; saveCats(); rebuildCats(); populateCatSelect(); renderPantry(); });
@@ -631,6 +642,8 @@ const Sync={
   writeAllPantry(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/pantry').set(pantry); }catch(e){} },
   writeMenu(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/menu').set(currentMenu); }catch(e){} },
   writeShop(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/shop').set(shopChecked); }catch(e){} },
+  writeHistItem(it){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/history/'+it.id).set(it); }catch(e){} },
+  removeHistItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/history/'+id).remove(); }catch(e){} },
   writeCustomItem(r){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+r.id).set(r); }catch(e){} },
   writeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); }catch(e){} },
   writeProfile(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/profile').set(profile); }catch(e){} },
@@ -1135,18 +1148,38 @@ function renderShop(){
 }
 document.getElementById('genBtn').onclick=generateMenu;
 document.getElementById('printBtn').onclick=()=>window.print();
+document.getElementById('saveWeekBtn').onclick=saveWeek;
 
 /* ============================================================ INICIO ============================================================ */
+function saveWeek(){
+  if(!currentMenu){ toast('Primero genera un menú semanal.'); return; }
+  const fecha=new Date().toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'});
+  const it={id:'w-'+Date.now(), fecha:fecha, menu:JSON.parse(JSON.stringify(currentMenu))};
+  history.unshift(it); saveHist(); Sync.writeHistItem(it); renderHistory(); toast('Semana guardada 📚');
+}
+function deleteWeek(id){ history=history.filter(w=>w.id!==id); saveHist(); Sync.removeHistItem(id); renderHistory(); toast('Semana eliminada'); }
+function reuseWeek(id){ const w=history.find(x=>x.id===id); if(!w) return; currentMenu=JSON.parse(JSON.stringify(w.menu)); shopChecked={}; menuEdited=true; persistMenu(); renderMenu(); goTab('menu'); toast('Menú cargado desde el historial'); }
+function renderHistory(){
+  const area=document.getElementById('histArea'); if(!area) return;
+  const list=history.slice().sort((a,b)=>String(b.id).localeCompare(String(a.id)));
+  if(!list.length){ area.innerHTML='<div class="empty"><div class="big">📚</div><p>Aún no has guardado ninguna semana.<br>Genera un menú y pulsa <b>💾 Guardar semana</b>.</p></div>'; return; }
+  area.innerHTML=list.map(w=>{
+    const rows=(w.menu||[]).map(d=>'<div class="histrow"><span class="hday">'+cap(d.dia)+'</span><span class="hmeals">🍽️ '+((d.almuerzo&&d.almuerzo.nombre)||'—')+' · 🥗 '+((d.ensalada&&d.ensalada.nombre)||'—')+' · 🌙 '+((d.cena&&d.cena.nombre)||'—')+'</span></div>').join('');
+    return '<div class="histweek"><div class="hh"><span class="hdate">📅 '+w.fecha+'</span><button class="histbtn" data-reuse="'+w.id+'">↺ Reutilizar</button><button class="histbtn" data-del="'+w.id+'">✕</button></div><div class="hbody">'+rows+'</div></div>';
+  }).join('');
+  area.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteWeek(b.dataset.del));
+  area.querySelectorAll('[data-reuse]').forEach(b=>b.onclick=()=>reuseWeek(b.dataset.reuse));
+}
 function backfillSalads(){ if(!currentMenu) return; let changed=false;
   const pool=buildColPool().filter(c=>c.tipo.includes('ensalada'));
   currentMenu.forEach(d=>{ if(!d.ensalada && pool.length){ d.ensalada=lite(pool[Math.floor(Math.random()*pool.length)]); changed=true; } });
   if(changed) persistMenu(); }
-applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads(); renderMenu(); }
+applyProfile(); renderPantry(); showColombian(); renderHistory(); if(currentMenu){ backfillSalads(); renderMenu(); }
 (function autoConnect(){
   let cfg=localStorage.getItem(LS.cfg), room=localStorage.getItem(LS.room);
   if(!cfg && typeof MI_FIREBASE!=='undefined' && MI_FIREBASE){ cfg=(typeof MI_FIREBASE==='string')?MI_FIREBASE:JSON.stringify(MI_FIREBASE); }
-  if(!room) room=(typeof MI_CODIGO!=='undefined'&&MI_CODIGO)||'casa';
-  if(cfg){ const _ri=document.getElementById('roomInp'); if(_ri) _ri.value=room;
+  if(!room) room=(typeof MI_CODIGO!=='undefined'&&MI_CODIGO)||'';
+  if(cfg && room){ const _ri=document.getElementById('roomInp'); if(_ri) _ri.value=room;
     const r=Sync.connect(cfg,room); if(!r.ok) setSt('⚠️ '+r.err,true); }
   updateStatus();
   try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
@@ -1154,6 +1187,16 @@ applyProfile(); renderPantry(); showColombian(); if(currentMenu){ backfillSalads
 </script>
 <style>
   .mbtn.fav.on{color:var(--terra);border-color:#f0cdb8;background:var(--terra-soft)}
+  .histweek{border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--sh-sm);margin-bottom:14px;overflow:hidden}
+  .histweek .hh{display:flex;align-items:center;gap:8px;padding:12px 15px;background:var(--surface-2);border-bottom:1px solid var(--line);font-family:'Poppins',sans-serif;font-weight:700;font-size:14px}
+  .histweek .hh .hdate{flex:1;min-width:0}
+  .histweek .hbody{padding:8px 15px 12px}
+  .histrow{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f4eee3;font-size:13px}
+  .histrow:last-child{border-bottom:none}
+  .histrow .hday{font-weight:700;color:var(--brand-d);min-width:78px;text-transform:capitalize}
+  .histrow .hmeals{flex:1}
+  .histbtn{background:none;border:1px solid var(--line);border-radius:8px;cursor:pointer;padding:5px 9px;font-size:12px;font-weight:600;color:var(--muted);flex:none}
+  .histbtn:hover{border-color:var(--brand);color:var(--brand-d)}
   .catcard h3 .catedit,.catcard h3 .catdel{background:none;border:none;color:#b7ad9b;cursor:pointer;font-size:13px;padding:0;border-radius:7px;line-height:1;width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex:none}
   .catcard h3 .catedit:hover{color:var(--brand-d);background:var(--brand-soft)}
   .catcard h3 .catdel:hover{color:var(--terra);background:var(--terra-soft)}
