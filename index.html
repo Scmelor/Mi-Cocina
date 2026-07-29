@@ -323,7 +323,9 @@
   </div>
   <div id="disList" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px"></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
-  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v21</div>
+  <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
+  <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-weight:600"><input type="checkbox" id="trChk"> Traducir recetas del mundo al español</label><div class="hint">Automático al abrir una receta en inglés. Si el traductor no responde, muestra el original.</div></div>
+  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v22</div>
 </div></div></div>
 
 <div class="toast" id="toast"></div>
@@ -598,7 +600,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',spoon:'micocina_spoon_v1',hist:'micocina_hist_v1',syn:'micocina_syn_v1',dislike:'micocina_dislike_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',spoon:'micocina_spoon_v1',hist:'micocina_hist_v1',syn:'micocina_syn_v1',dislike:'micocina_dislike_v1',tr:'micocina_tr_v1',autotr:'micocina_autotr_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -767,6 +769,7 @@ function openSettings(){
   document.getElementById('roomInp').value=(localStorage.getItem(LS.room)||(typeof MI_CODIGO!=='undefined'&&MI_CODIGO)||'');
   renderSynList();
   renderDislikeList();
+  document.getElementById('trChk').checked=autoTr;
   document.getElementById('settings').classList.add('open');
 }
 function fileToDataURL(file,max,cb){ const rd=new FileReader();
@@ -788,6 +791,7 @@ function closeSettings(){ document.getElementById('settings').classList.remove('
 document.getElementById('gearBtn').onclick=openSettings;
 document.getElementById('addSynBtn').onclick=addSyn;
 document.getElementById('addDisBtn').onclick=addDislike;
+document.getElementById('trChk').onchange=e=>{ autoTr=e.target.checked; localStorage.setItem(LS.autotr, autoTr?'1':'0'); toast(autoTr?'Traducción activada':'Traducción desactivada'); };
 document.getElementById('bannerSync').onclick=openSettings;
 document.getElementById('settings').onclick=e=>{ if(e.target.id==='settings') closeSettings(); };
 document.getElementById('saveRoomBtn').onclick=()=>{
@@ -923,12 +927,14 @@ async function openSpoonRecipe(id){
   const ings=(m.extendedIngredients||[]).map(x=>x.name||x.original).filter(Boolean);
   const steps=[]; if(m.analyzedInstructions&&m.analyzedInstructions[0]&&m.analyzedInstructions[0].steps) m.analyzedInstructions[0].steps.forEach(x=>steps.push(x.step));
   if(!steps.length && m.instructions) m.instructions.replace(/<[^>]+>/g,'').split(/\.\s+/).forEach(x=>{ if(x.trim()) steps.push(x.trim()); });
+  let T=m.title, IG=ings, ST=steps;
+  if(autoTr){ openModal('<div class="loading" style="padding:70px"><span class="spin"></span>Traduciendo receta…</div>'); _trFail=false; T=await tr1(m.title); IG=await trArr(ings); ST=await trArr(steps); }
   openModal('<button class="close" onclick="closeModal()">\u2715</button>'+
     '<div class="hero" style="background-image:url(\''+(m.image||'')+'\')"></div>'+
-    '<div class="sheet-body"><h3>'+m.title+'</h3>'+
-    '<div class="tags"><span class="tag">\ud83c\udf0e Spoonacular</span>'+(m.readyInMinutes?'<span class="tag">\u23f1\ufe0f '+m.readyInMinutes+' min</span>':'')+'</div>'+
-    '<p class="sec-t">Ingredientes</p><ul class="ing-list">'+ings.map(n=>ingRow(n,'')).join('')+'</ul>'+
-    '<p class="sec-t">Preparación</p><ol class="steps">'+steps.map(x=>'<li>'+x+'</li>').join('')+'</ol>'+
+    '<div class="sheet-body"><h3>'+T+'</h3>'+
+    '<div class="tags"><span class="tag">\ud83c\udf0e Spoonacular</span>'+(m.readyInMinutes?'<span class="tag">\u23f1\ufe0f '+m.readyInMinutes+' min</span>':'')+(autoTr?'<span class="tag">\ud83c\udf10 traducido</span>':'')+'</div>'+
+    '<p class="sec-t">Ingredientes</p><ul class="ing-list">'+IG.map((n,idx)=>ingRow(n,'',ings[idx])).join('')+'</ul>'+
+    '<p class="sec-t">Preparación</p><ol class="steps">'+ST.map(x=>'<li>'+x+'</li>').join('')+'</ol>'+
     (m.sourceUrl?'<a class="yt" href="'+m.sourceUrl+'" target="_blank">\ud83d\udd17 Ver receta completa</a>':'')+
     '<div class="set-actions" style="margin-top:14px"><button class="btn" id="addMenuBtn">\ud83d\udcc5 Añadir al menú</button></div></div>');
   document.getElementById('addMenuBtn').onclick=()=>addSpoonToMenu(id);
@@ -981,8 +987,8 @@ document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
 function openModal(html){ document.getElementById('sheet').innerHTML=html; document.getElementById('modal').classList.add('open'); }
 function closeModal(){ document.getElementById('modal').classList.remove('open'); }
 document.getElementById('modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
-function ingRow(name,qty){ const has=isAvail(name);
-  const dis=isDisliked(name); return '<li><span class="dot9 '+(has?'yes':'no')+'"></span>'+name+(dis?' <span style="color:var(--terra);font-size:11px;font-weight:700">\ud83d\udc4e</span>':'')+'<span class="q">'+(qty||'')+' '+(has?'· lo tienes':'· falta')+'</span></li>'; }
+function ingRow(name,qty,availName){ const an=availName||name; const has=isAvail(an);
+  const dis=isDisliked(an); return '<li><span class="dot9 '+(has?'yes':'no')+'"></span>'+name+(dis?' <span style="color:var(--terra);font-size:11px;font-weight:700">\ud83d\udc4e</span>':'')+'<span class="q">'+(qty||'')+' '+(has?'· lo tienes':'· falta')+'</span></li>'; }
 function openColRecipe(id){ const r=ALL_RECIPES().find(x=>x.id===id); if(!r) return;
   const badge=r.custom?('⭐ '+(r.region||'Mía')):('🇨🇴 '+r.region);
   openModal('<button class="close" onclick="closeModal()">✕</button>'+
@@ -995,16 +1001,29 @@ function openColRecipe(id){ const r=ALL_RECIPES().find(x=>x.id===id); if(!r) ret
   document.getElementById('addMenuBtn').onclick=()=>addColToMenu(r.id);
   document.getElementById('favBtn').onclick=()=>{ toggleFav({source:'col',id:r.id,nombre:r.nombre,e:r.e,grad:r.grad,thumb:null}); openColRecipe(r.id); };
   if(r.custom) document.getElementById('delRecipeBtn').onclick=()=>deleteCustom(r.id); }
+let TR=JSON.parse(localStorage.getItem(LS.tr)||'{}');
+let autoTr=localStorage.getItem(LS.autotr)!=='0';
+let _trFail=false;
+function saveTR(){ try{ localStorage.setItem(LS.tr,JSON.stringify(TR)); }catch(e){} }
+async function tr1(text){ const t=(text||'').trim(); if(!t||_trFail) return text||''; const k='t:'+t.toLowerCase(); if(k in TR) return TR[k];
+  if(!/[a-zA-Z]/.test(t)) return text;
+  try{ const r=await Promise.race([ fetch('https://api.mymemory.translated.net/get?langpair=en|es&q='+encodeURIComponent(t.slice(0,480))).then(x=>x.json()), new Promise((_,rej)=>setTimeout(()=>rej(new Error('t')),7000)) ]);
+    const out=r&&r.responseData&&r.responseData.translatedText;
+    if(out && String(r.responseStatus)==='200' && !/MYMEMORY WARNING|QUERY LENGTH|INVALID/i.test(out)){ TR[k]=out; saveTR(); return out; } }catch(e){ _trFail=true; }
+  return text; }
+async function trArr(arr){ const out=[]; for(let i=0;i<arr.length;i++){ if(_trFail){ out.push(arr[i]); } else { out.push(await tr1(arr[i])); } } return out; }
 async function openApiRecipe(id){
   openModal('<div class="loading" style="padding:70px"><span class="spin"></span>Cargando receta…</div>');
   const m=await loadApiDetails(id); if(!m){ openModal('<div class="loading">No se pudo cargar.</div>'); return; }
-  const ings=apiIngredients(m);
+  const ings=apiIngredients(m); const rawSteps=(m.strInstructions||'').split(/\r?\n/).filter(s=>s.trim());
+  let T=m.strMeal, IG=ings.map(i=>i[0]), ST=rawSteps;
+  if(autoTr){ openModal('<div class="loading" style="padding:70px"><span class="spin"></span>Traduciendo receta…</div>'); _trFail=false; T=await tr1(m.strMeal); IG=await trArr(ings.map(i=>i[0])); ST=await trArr(rawSteps); }
   openModal('<button class="close" onclick="closeModal()">✕</button>'+
     '<div class="hero" style="background-image:url(\''+m.strMealThumb+'\')"></div>'+
-    '<div class="sheet-body"><h3>'+m.strMeal+'</h3>'+
-    '<div class="tags"><span class="tag">🌍 '+(m.strArea||'Mundo')+'</span><span class="tag">🍽️ '+(m.strCategory||'')+'</span></div>'+
-    '<p class="sec-t">Ingredientes</p><ul class="ing-list">'+ings.map(i=>ingRow(i[0],i[1])).join('')+'</ul>'+
-    '<p class="sec-t">Preparación</p><ol class="steps">'+(m.strInstructions||'').split(/\r?\n/).filter(s=>s.trim()).map(s=>'<li>'+s+'</li>').join('')+'</ol>'+
+    '<div class="sheet-body"><h3>'+T+'</h3>'+
+    '<div class="tags"><span class="tag">🌍 '+(m.strArea||'Mundo')+'</span><span class="tag">🍽️ '+(m.strCategory||'')+'</span>'+(autoTr?'<span class="tag">🌐 traducido</span>':'')+'</div>'+
+    '<p class="sec-t">Ingredientes</p><ul class="ing-list">'+ings.map((i,idx)=>ingRow(IG[idx],i[1],i[0])).join('')+'</ul>'+
+    '<p class="sec-t">Preparación</p><ol class="steps">'+ST.map(s=>'<li>'+s+'</li>').join('')+'</ol>'+
     (m.strYoutube?'<a class="yt" href="'+m.strYoutube+'" target="_blank">▶️ Ver video en YouTube</a>':'')+
     '<div class="set-actions" style="margin-top:14px"><button class="btn" id="addMenuBtn">📅 Añadir al menú</button><button class="btn ghost" id="favBtn">'+(isFav(m.idMeal)?'❤ En favoritas':'♡ Favorita')+'</button></div></div>');
   document.getElementById('addMenuBtn').onclick=()=>addApiToMenu(m);
