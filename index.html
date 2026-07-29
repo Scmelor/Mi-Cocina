@@ -314,8 +314,16 @@
     <button class="btn sm" id="addSynBtn">Agregar</button>
   </div>
   <div id="synList" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px"></div>
+  <hr style="border:none;border-top:1px solid var(--line);margin:22px 0">
+  <h3>Ingredientes que no me gustan</h3>
+  <p class="lead">Las recetas que contengan estos ingredientes no se recomendarán en el menú semanal. Es preciso: “pepino” no afecta a “pepinillo”.</p>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <input id="disA" placeholder="Ej. pepino" style="flex:1;min-width:140px">
+    <button class="btn sm" id="addDisBtn">Agregar</button>
+  </div>
+  <div id="disList" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px"></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
-  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v18</div>
+  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v19</div>
 </div></div></div>
 
 <div class="toast" id="toast"></div>
@@ -590,7 +598,7 @@ function catOf(name){
 }
 
 /* ============================================================ ESTADO ============================================================ */
-const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',spoon:'micocina_spoon_v1',hist:'micocina_hist_v1',syn:'micocina_syn_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
+const LS={pantry:'micocina_pantry_v2',menu:'micocina_menu_v2',shop:'micocina_shop_v2',custom:'micocina_custom_v1',fav:'micocina_fav_v1',api:'micocina_api_v1',profile:'micocina_profile_v1',cats:'micocina_cats_v1',hidden:'micocina_hidden_v1',catnames:'micocina_catnames_v1',spoon:'micocina_spoon_v1',hist:'micocina_hist_v1',syn:'micocina_syn_v1',dislike:'micocina_dislike_v1',cfg:'micocina_fb_cfg',room:'micocina_room'};
 let pantry=loadPantry();
 let currentMenu=JSON.parse(localStorage.getItem(LS.menu)||'null');
 let shopChecked=JSON.parse(localStorage.getItem(LS.shop)||'{}');
@@ -640,6 +648,14 @@ let _availW=null; function invalAvail(){ _availW=null; }
 function availWords(){ if(_availW) return _availW; const st=new Set(); Object.values(pantry).forEach(v=>{ if(v&&v.have) wordsOf(v.name).forEach(w=>st.add(w)); }); _availW=st; return st; }
 function isAvail(name){ const hw=availWords(); for(const w of wordsOf(name)){ if(hw.has(w)) return true; } return false; }
 buildSyn();
+let dislikes=JSON.parse(localStorage.getItem(LS.dislike)||'[]');
+function saveDislike(){ localStorage.setItem(LS.dislike,JSON.stringify(dislikes)); }
+function wEq(a,b){ return a===b || a===b+'s' || b===a+'s' || a===b+'es' || b===a+'es'; }
+function containsSeq(r,d){ if(!d.length) return false; for(let i=0;i+d.length<=r.length;i++){ let ok=true; for(let j=0;j<d.length;j++){ if(!wEq(r[i+j],d[j])){ ok=false; break; } } if(ok) return true; } return false; }
+function isDisliked(name){ if(!dislikes.length) return false; const rw=norm(name).split(' ').filter(Boolean); const rc=canon(name);
+  for(const d of dislikes){ if(canon(d.name)===rc) return true; if(containsSeq(rw, norm(d.name).split(' ').filter(Boolean))) return true; } return false; }
+function recipeHasDislike(r){ return !!(r&&r.ing&&r.ing.some(i=>isDisliked(i[0]))); }
+function apiHasDislike(m){ try{ return apiIngredients(m).some(i=>isDisliked(i[0])); }catch(e){ return false; } }
 
 /* ============================================================ SYNC (Firebase, opcional) ============================================================ */
 const Sync={
@@ -666,6 +682,7 @@ const Sync={
     this.db.ref(b+'/shop').on('value',s=>{ const v=s.val(); if(v){ shopChecked=v; saveShop(); } else if(shopChecked&&Object.keys(shopChecked).length){ this.writeShop(); } renderMenu(); });
     this.db.ref(b+'/custom').on('value',s=>{ const v=s.val(); customRecipes=v?Object.values(v):[]; saveCustom(); if(lastRecipeView) lastRecipeView(); });
     this.db.ref(b+'/syn').on('value',s=>{ const v=s.val(); customSyn=v?Object.values(v):[]; saveSyn(); buildSyn(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
+    this.db.ref(b+'/dislike').on('value',s=>{ const v=s.val(); dislikes=v?Object.values(v):[]; saveDislike(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
     this.db.ref(b+'/history').on('value',s=>{ const v=s.val(); history=v?Object.values(v):[]; saveHist(); renderHistory(); });
     this.db.ref(b+'/favs').on('value',s=>{ favorites=s.val()||{}; saveFav(); if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); });
     this.db.ref(b+'/profile').on('value',s=>{ const v=s.val(); if(v){ profile=v; localStorage.setItem(LS.profile,JSON.stringify(profile)); applyProfile(); } });
@@ -684,6 +701,8 @@ const Sync={
   removeHistItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/history/'+id).remove(); }catch(e){} },
   writeCustomItem(r){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/custom/'+r.id).set(r); }catch(e){} },
   writeSynItem(pr){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/syn/'+pr.id).set(pr); }catch(e){} },
+  writeDislikeItem(d){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/dislike/'+d.id).set(d); }catch(e){} },
+  removeDislikeItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/dislike/'+id).remove(); }catch(e){} },
   removeSynItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/syn/'+id).remove(); }catch(e){} },
   writeFavItem(id){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/favs/'+id).set(favorites[id]); }catch(e){} },
   writeProfile(){ if(this.mode==='cloud') try{ this.db.ref(this.base()+'/profile').set(profile); }catch(e){} },
@@ -723,6 +742,15 @@ function applyProfile(){
   const logo=document.getElementById('logoBox'); if(logo) logo.innerHTML=profile.photo?('<img src="'+profile.photo+'" alt="">'):'🍲';
 }
 function pfSetPreview(url){ const pv=document.getElementById('pfPreview'); if(pv) pv.innerHTML=url?('<img src="'+url+'">'):'🍲'; }
+function renderDislikeList(){ const el=document.getElementById('disList'); if(!el) return;
+  el.innerHTML = dislikes.length ? dislikes.map(d=>'<span class="syn-chip">\ud83d\udc4e '+d.name+' <button data-dis="'+d.id+'" title="Quitar">\u2715</button></span>').join('') : '<span class="hint">Ninguno por ahora.</span>';
+  el.querySelectorAll('[data-dis]').forEach(b=>b.onclick=()=>deleteDislike(b.dataset.dis)); }
+function addDislike(){ const a=document.getElementById('disA').value.trim(); if(!a){ toast('Escribe un ingrediente.'); return; }
+  const d={id:'d-'+Date.now(),name:a}; dislikes.push(d); saveDislike(); Sync.writeDislikeItem(d);
+  document.getElementById('disA').value=''; renderDislikeList();
+  if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); toast('Agregado a los que no te gustan'); }
+function deleteDislike(id){ dislikes=dislikes.filter(x=>x.id!==id); saveDislike(); Sync.removeDislikeItem(id); renderDislikeList();
+  if(lastRecipeView) lastRecipeView(); if(currentMenu) renderMenu(); toast('Quitado de la lista'); }
 function renderSynList(){ const el=document.getElementById('synList'); if(!el) return;
   el.innerHTML = customSyn.length ? customSyn.map(pr=>'<span class="syn-chip">'+pr.a+' = '+pr.b+' <button data-syn="'+pr.id+'" title="Quitar">✕</button></span>').join('') : '<span class="hint">Aún no has agregado sinónimos.</span>';
   el.querySelectorAll('[data-syn]').forEach(b=>b.onclick=()=>deleteSyn(b.dataset.syn)); }
@@ -738,6 +766,7 @@ function openSettings(){
   pendingPhoto=undefined; pfSetPreview(profile.photo||null);
   document.getElementById('roomInp').value=(localStorage.getItem(LS.room)||(typeof MI_CODIGO!=='undefined'&&MI_CODIGO)||'');
   renderSynList();
+  renderDislikeList();
   document.getElementById('settings').classList.add('open');
 }
 function fileToDataURL(file,max,cb){ const rd=new FileReader();
@@ -758,6 +787,7 @@ document.getElementById('saveProfile').onclick=()=>{
 function closeSettings(){ document.getElementById('settings').classList.remove('open'); }
 document.getElementById('gearBtn').onclick=openSettings;
 document.getElementById('addSynBtn').onclick=addSyn;
+document.getElementById('addDisBtn').onclick=addDislike;
 document.getElementById('bannerSync').onclick=openSettings;
 document.getElementById('settings').onclick=e=>{ if(e.target.id==='settings') closeSettings(); };
 document.getElementById('saveRoomBtn').onclick=()=>{
@@ -952,7 +982,7 @@ function openModal(html){ document.getElementById('sheet').innerHTML=html; docum
 function closeModal(){ document.getElementById('modal').classList.remove('open'); }
 document.getElementById('modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
 function ingRow(name,qty){ const has=isAvail(name);
-  return '<li><span class="dot9 '+(has?'yes':'no')+'"></span>'+name+'<span class="q">'+(qty||'')+' '+(has?'· lo tienes':'· falta')+'</span></li>'; }
+  const dis=isDisliked(name); return '<li><span class="dot9 '+(has?'yes':'no')+'"></span>'+name+(dis?' <span style="color:var(--terra);font-size:11px;font-weight:700">\ud83d\udc4e</span>':'')+'<span class="q">'+(qty||'')+' '+(has?'· lo tienes':'· falta')+'</span></li>'; }
 function openColRecipe(id){ const r=ALL_RECIPES().find(x=>x.id===id); if(!r) return;
   const badge=r.custom?('⭐ '+(r.region||'Mía')):('🇨🇴 '+r.region);
   openModal('<button class="close" onclick="closeModal()">✕</button>'+
@@ -1059,11 +1089,11 @@ function scoreCol(r){ const total=r.ing.length,has=r.ing.filter(i=>isAvail(i[0])
 function scoreApi(m){ const ings=apiIngredients(m),has=ings.filter(i=>isAvail(i[0])).length;
   return {ratio:ings.length?has/ings.length:0,missing:ings.filter(i=>!isAvail(i[0]))}; }
 function colCandidate(r){ const s=scoreCol(r); return {source:'col',id:r.id,nombre:r.nombre,e:r.e,grad:r.grad,thumb:null,tipo:r.tipo,ratio:s.ratio,missing:s.missing,protein:proteinOf(r.ing.map(i=>i[0]))}; }
-function buildColPool(){ return COL.concat(customRecipes).map(colCandidate); }
+function buildColPool(){ return COL.concat(customRecipes).filter(r=>!recipeHasDislike(r)).map(colCandidate); }
 
 let genSeq=0, menuEdited=false;
 function apiCandidate(m){ const s=scoreApi(m); return {source:'api',id:m.idMeal,nombre:m.strMeal,thumb:m.strMealThumb,grad:['#15774a','#0f5c39'],tipo:['almuerzo','cena'],ratio:s.ratio,missing:s.missing,protein:proteinOf(apiIngredients(m).map(i=>i[0]))}; }
-function addCachedApi(cand){ Object.values(apiCache).forEach(m=>{ if(m&&m.idMeal) cand.push(apiCandidate(m)); }); }
+function addCachedApi(cand){ Object.values(apiCache).forEach(m=>{ if(m&&m.idMeal && !apiHasDislike(m)) cand.push(apiCandidate(m)); }); }
 async function fetchWorldCandidates(area){
   const world=[];
   const job=(async()=>{
@@ -1071,7 +1101,7 @@ async function fetchWorldCandidates(area){
     const lists=await Promise.all(areas.map(a=>apiFetch(API+'filter.php?a='+a).catch(()=>[])));
     let pool=[]; lists.forEach(meals=>pool.push(...meals.slice(0,6)));
     pool=pool.sort(()=>Math.random()-.5).slice(0,area==='mas-mundo'?8:5);
-    const jobs=pool.map(pp=>loadApiDetails(pp.idMeal).then(m=>{ if(m) world.push(apiCandidate(m)); }).catch(()=>{}));
+    const jobs=pool.map(pp=>loadApiDetails(pp.idMeal).then(m=>{ if(m && !apiHasDislike(m)) world.push(apiCandidate(m)); }).catch(()=>{}));
     await Promise.race([Promise.allSettled(jobs), new Promise(r=>setTimeout(r,8000))]);
   })();
   try{ await Promise.race([job, new Promise(r=>setTimeout(r,60000))]); }catch(e){}
