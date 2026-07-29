@@ -80,8 +80,9 @@
   .btn.ghost{background:var(--surface);color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
   .btn.ghost:hover{border-color:var(--brand);color:var(--brand-d)}
   .btn.sm{padding:9px 14px;font-size:13px;border-radius:11px}
-  input,select,textarea{font-family:inherit;font-size:14px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);width:100%}
-  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea{font-family:inherit;font-size:14px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);width:100%}
+  input[type=checkbox]:not(.chk),input[type=radio]{width:auto;height:auto;padding:0;margin:0;border:0;accent-color:var(--brand);cursor:pointer;flex:none}
+  input:not([type=checkbox]):not([type=radio]):not([type=file]):focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
 
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--surface);padding:14px;border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:20px;box-shadow:var(--sh-sm)}
   .toolbar .grow{flex:1;min-width:170px}
@@ -304,7 +305,7 @@
   </div>
   <div class="set-actions"><button class="btn" id="saveRoomBtn">Guardar código</button></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
-  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v15</div>
+  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v16</div>
 </div></div></div>
 
 <div class="toast" id="toast"></div>
@@ -551,7 +552,10 @@ const SYN = {
   cilantro:'cilantro', coriander:'cilantro','fresh coriander':'cilantro',
   cumin:'comino', comino:'comino', guascas:'guascas', capers:'alcaparras', alcaparras:'alcaparras'
 };
-function canon(name){ const n=norm(name); if(SYN[n]) return SYN[n]; for(const k in SYN){ if(n.includes(k)) return SYN[k]; } return n; }
+function canon(name){ const n=norm(name); if(SYN[n]) return SYN[n];
+  for(const k in SYN){ if(k.indexOf(' ')>=0 && n.indexOf(k)>=0) return SYN[k]; }
+  const ws=n.split(' '); for(const w of ws){ if(SYN[w]) return SYN[w]; }
+  return n; }
 function catOf(name){
   const c=canon(name), low=(name||'').toLowerCase();
   const map={
@@ -950,11 +954,12 @@ function openRecipeForm(){
       '<label style="display:flex;gap:6px;align-items:center;font-weight:500;cursor:pointer"><input type="checkbox" id="rfCen"> Cena</label>'+
       '<label style="display:flex;gap:6px;align-items:center;font-weight:500;cursor:pointer"><input type="checkbox" id="rfEns"> Ensalada</label></div></div>'+
     '<div class="field"><label>Tiempo (opcional)</label><input id="rfTime" placeholder="Ej. 30 min"></div>'+
-    '<div class="field"><label>Ingredientes</label><div id="ingRows"></div>'+
+    '<div class="field"><label>Ingredientes</label><div class="hint" style="margin:0 0 8px">Elige de tu mercado o escribe uno nuevo.</div><datalist id="ingList"></datalist><div id="ingRows"></div>'+
       '<button class="btn ghost sm" id="addIngRow" style="margin-top:8px">＋ Ingrediente</button></div>'+
     '<div class="field"><label>Preparación (un paso por línea)</label><textarea id="rfSteps" placeholder="Paso 1&#10;Paso 2&#10;Paso 3"></textarea></div>'+
     '<div class="set-actions"><button class="btn" id="saveRecipe">Guardar receta</button><button class="btn ghost" onclick="closeModal()">Cancelar</button></div>'+
     '<div class="statusline err" id="rfMsg" style="display:none"></div></div>');
+  const _dl=document.getElementById('ingList'); if(_dl){ const _ns=[...new Set(Object.values(pantry).map(v=>v.name))].sort((a,b)=>a.localeCompare(b)); _dl.innerHTML=_ns.map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'">').join(''); }
   document.getElementById('addIngRow').onclick=()=>addIngRow();
   addIngRow(); addIngRow(); addIngRow();
   document.getElementById('saveRecipe').onclick=saveCustomRecipe;
@@ -963,11 +968,12 @@ function addIngRow(name,cat){
   const rows=document.getElementById('ingRows'); const div=document.createElement('div');
   div.className='ingrow'; div.style.cssText='display:flex;gap:6px;margin-bottom:6px';
   const opts=CAT_ORDER.map(k=>'<option value="'+k+'"'+(k===(cat||'vegetales')?' selected':'')+'>'+CATS[k].e+' '+CATS[k].n+'</option>').join('');
-  div.innerHTML='<input class="ri-name" placeholder="Ingrediente" value="'+(name||'')+'" style="flex:2;min-width:0">'+
+  div.innerHTML='<input class="ri-name" list="ingList" placeholder="Ingrediente" value="'+(name||'')+'" style="flex:2;min-width:0">'+
     '<input class="ri-qty" placeholder="Cant." style="flex:1;min-width:0">'+
     '<select class="ri-cat" style="flex:1.5;min-width:0">'+opts+'</select>'+
     '<button class="mbtn ri-del" type="button" title="Quitar">✕</button>';
   div.querySelector('.ri-del').onclick=()=>div.remove();
+  div.querySelector('.ri-name').oninput=e=>{ const it=Object.values(pantry).find(v=>norm(v.name)===norm(e.target.value)); if(it) div.querySelector('.ri-cat').value=it.cat; };
   rows.appendChild(div);
 }
 function saveCustomRecipe(){
