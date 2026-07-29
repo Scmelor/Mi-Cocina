@@ -323,7 +323,7 @@
   </div>
   <div id="disList" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px"></div>
   <div class="statusline" id="syncStatus">Estado: modo local (sin sincronizar).</div>
-  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v19</div>
+  <div class="hint" style="text-align:center;margin-top:12px">Cocina Vicuy · v21</div>
 </div></div></div>
 
 <div class="toast" id="toast"></div>
@@ -640,13 +640,13 @@ let customSyn=JSON.parse(localStorage.getItem(LS.syn)||'[]');
 let synIndex={};
 function saveSyn(){ localStorage.setItem(LS.syn,JSON.stringify(customSyn)); }
 function buildSyn(){ synIndex={}; customSyn.forEach(pr=>{ const a=norm(pr.a),b=norm(pr.b); if(!a||!b||a===b) return; (synIndex[a]=synIndex[a]||[]).push(b); (synIndex[b]=synIndex[b]||[]).push(a); }); invalAvail(); }
-function stems(w){ const out=[w]; if(w.length>3&&w.endsWith('s')) out.push(w.slice(0,-1)); if(w.length>4&&w.endsWith('es')) out.push(w.slice(0,-2)); return out; }
-function wordsOf(name){ const c=canon(name); const set=new Set([c, norm(name)]); (c+' '+norm(name)).split(' ').forEach(w=>{ stems(w).forEach(x=>{ if(x.length>=3&&!STOPW.has(x)) set.add(x); }); });
-  [...set].forEach(t=>{ (synIndex[t]||[]).forEach(e=>{ set.add(e); stems(e).forEach(x=>{ if(x.length>=3&&!STOPW.has(x)) set.add(x); }); }); });
-  return set; }
-let _availW=null; function invalAvail(){ _availW=null; }
-function availWords(){ if(_availW) return _availW; const st=new Set(); Object.values(pantry).forEach(v=>{ if(v&&v.have) wordsOf(v.name).forEach(w=>st.add(w)); }); _availW=st; return st; }
-function isAvail(name){ const hw=availWords(); for(const w of wordsOf(name)){ if(hw.has(w)) return true; } return false; }
+function wordsList(name){ const c=canon(name); const set=new Set([c]); (c+' '+norm(name)).split(' ').forEach(w=>{ if(w.length>=3&&!STOPW.has(w)) set.add(w); });
+  [...set].forEach(t=>{ (synIndex[t]||[]).forEach(e=>{ set.add(e); e.split(' ').forEach(w=>{ if(w.length>=3&&!STOPW.has(w)) set.add(w); }); }); });
+  return [...set]; }
+function subsetW(A,B){ return A.length>0 && A.every(a=>B.some(b=>wEq(a,b))); }
+let _pwl=null; function invalAvail(){ _pwl=null; }
+function pantryWL(){ if(_pwl) return _pwl; _pwl=Object.values(pantry).filter(v=>v&&v.have).map(v=>({rc:canon(v.name), rw:wordsList(v.name)})); return _pwl; }
+function isAvail(name){ const rc=canon(name), rw=wordsList(name); for(const p of pantryWL()){ if(p.rc===rc) return true; if(subsetW(rw,p.rw)||subsetW(p.rw,rw)) return true; } return false; }
 buildSyn();
 let dislikes=JSON.parse(localStorage.getItem(LS.dislike)||'[]');
 function saveDislike(){ localStorage.setItem(LS.dislike,JSON.stringify(dislikes)); }
@@ -1032,12 +1032,11 @@ function openRecipeForm(){
       '<label style="display:flex;gap:6px;align-items:center;font-weight:500;cursor:pointer"><input type="checkbox" id="rfCen"> Cena</label>'+
       '<label style="display:flex;gap:6px;align-items:center;font-weight:500;cursor:pointer"><input type="checkbox" id="rfEns"> Ensalada</label></div></div>'+
     '<div class="field"><label>Tiempo (opcional)</label><input id="rfTime" placeholder="Ej. 30 min"></div>'+
-    '<div class="field"><label>Ingredientes</label><div class="hint" style="margin:0 0 8px">Elige de tu mercado o escribe uno nuevo.</div><datalist id="ingList"></datalist><div id="ingRows"></div>'+
+    '<div class="field"><label>Ingredientes</label><div class="hint" style="margin:0 0 8px">Elige la categoría y verás tus ingredientes de esa categoría. Si escribes uno nuevo, se agrega a tu Mercado al guardar.</div><div id="ingRows"></div>'+
       '<button class="btn ghost sm" id="addIngRow" style="margin-top:8px">＋ Ingrediente</button></div>'+
     '<div class="field"><label>Preparación (un paso por línea)</label><textarea id="rfSteps" placeholder="Paso 1&#10;Paso 2&#10;Paso 3"></textarea></div>'+
     '<div class="set-actions"><button class="btn" id="saveRecipe">Guardar receta</button><button class="btn ghost" onclick="closeModal()">Cancelar</button></div>'+
     '<div class="statusline err" id="rfMsg" style="display:none"></div></div>');
-  const _dl=document.getElementById('ingList'); if(_dl){ const _ns=[...new Set(Object.values(pantry).map(v=>v.name))].sort((a,b)=>a.localeCompare(b)); _dl.innerHTML=_ns.map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'">').join(''); }
   document.getElementById('addIngRow').onclick=()=>addIngRow();
   addIngRow(); addIngRow(); addIngRow();
   document.getElementById('saveRecipe').onclick=saveCustomRecipe;
@@ -1045,13 +1044,17 @@ function openRecipeForm(){
 function addIngRow(name,cat){
   const rows=document.getElementById('ingRows'); const div=document.createElement('div');
   div.className='ingrow'; div.style.cssText='display:flex;gap:6px;margin-bottom:6px';
+  const dlid='dl'+Math.random().toString(36).slice(2,8);
   const opts=CAT_ORDER.map(k=>'<option value="'+k+'"'+(k===(cat||'vegetales')?' selected':'')+'>'+CATS[k].e+' '+CATS[k].n+'</option>').join('');
-  div.innerHTML='<input class="ri-name" list="ingList" placeholder="Ingrediente" value="'+(name||'')+'" style="flex:2;min-width:0">'+
+  div.innerHTML='<input class="ri-name" list="'+dlid+'" placeholder="Ingrediente" value="'+(name||'')+'" style="flex:2;min-width:0"><datalist id="'+dlid+'"></datalist>'+
     '<input class="ri-qty" placeholder="Cant." style="flex:1;min-width:0">'+
     '<select class="ri-cat" style="flex:1.5;min-width:0">'+opts+'</select>'+
     '<button class="mbtn ri-del" type="button" title="Quitar">✕</button>';
+  const nameI=div.querySelector('.ri-name'), catS=div.querySelector('.ri-cat'), dl=div.querySelector('datalist');
+  function fillDL(){ const c=catS.value; const ns=Object.values(pantry).filter(v=>v&&v.cat===c).map(v=>v.name).sort((a,b)=>a.localeCompare(b)); dl.innerHTML=ns.map(n=>'<option value="'+n.replace(/"/g,'&quot;')+'">').join(''); }
+  fillDL(); catS.onchange=fillDL;
+  nameI.oninput=()=>{ const it=Object.values(pantry).find(v=>v&&norm(v.name)===norm(nameI.value)); if(it){ catS.value=it.cat; fillDL(); } };
   div.querySelector('.ri-del').onclick=()=>div.remove();
-  div.querySelector('.ri-name').oninput=e=>{ const it=Object.values(pantry).find(v=>norm(v.name)===norm(e.target.value)); if(it) div.querySelector('.ri-cat').value=it.cat; };
   rows.appendChild(div);
 }
 function saveCustomRecipe(){
@@ -1064,10 +1067,13 @@ function saveCustomRecipe(){
   if(!tipo.length) return show('Elige al menos una comida (almuerzo, cena o ensalada).');
   if(!ing.length) return show('Agrega al menos un ingrediente.');
   const e=tipo.includes('ensalada')&&tipo.length===1?'🥗':(tipo.includes('cena')&&!tipo.includes('almuerzo')?'🍳':'🍽️');
+  let _added=0;
+  ing.forEach(it=>{ const nm=it[0]; if(!Object.values(pantry).some(v=>v&&norm(v.name)===norm(nm))){ const k=keyOf(nm); pantry[k]={name:nm,cat:it[2],have:false}; Sync.writeItem(k); _added++; } });
+  if(_added){ savePantry(); renderPantry(); }
   const rec={id:'my-'+Date.now(), nombre:name, tipo, e, grad:['#15774a','#d99a2b'], tiempo:document.getElementById('rfTime').value.trim(), region:'Mía', custom:true, ing, pasos:pasos.length?pasos:['Prepara a tu gusto.']};
   customRecipes.push(rec); saveCustom(); Sync.writeCustomItem(rec); closeModal();
   const chip=document.querySelector('.chip[data-filter="mias"]'); if(chip) setChip(chip); lastRecipeView=showMine; showMine();
-  toast('Receta “'+name+'” guardada');
+  toast('Receta “'+name+'” guardada'+(_added?(' · '+_added+' al Mercado'):''));
 }
 
 
